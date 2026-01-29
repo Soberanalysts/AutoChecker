@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Environment variables
+.env
+
+# Database
+*.db
+*.sqlite3
+backup.sql
+
+# n8n
+n8n_data/
+.n8n/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Logs
+*.log
+
+# Sample data (임시 파일들)
+sample-data/*.jpg
+sample-data/*.pdf
+sample-data/*.png
+
+# 단, example 파일은 유지
+!sample-data/.gitkeep

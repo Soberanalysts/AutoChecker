@@ -1,0 +1,330 @@
+{
+  "name": "한국어 쓰기 자동 채점 워크플로우",
+  "nodes": [
+    {
+      "id": "1",
+      "name": "Webhook - 답안 제출",
+      "type": "n8n-nodes-base.webhook",
+      "description": "학생 답안 이미지/PDF 수신",
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-answer",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "expectedInput": {
+        "student_number": "학생번호",
+        "student_name": "학생이름",
+        "assignment_id": "과제ID",
+        "file": "base64 인코딩된 이미지 또는 PDF URL"
+      }
+    },
+    {
+      "id": "2",
+      "name": "OCR - 텍스트 추출",
+      "type": "n8n-nodes-base.httpRequest",
+      "description": "Google Vision API 또는 Tesseract OCR",
+      "parameters": {
+        "method": "POST",
+        "url": "https://vision.googleapis.com/v1/images:annotate",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "googleApi",
+        "options": {
+          "bodyContentType": "json"
+        }
+      },
+      "alternative": {
+        "service": "Naver Clova OCR",
+        "url": "https://naveropenapi.apigw.ntruss.com/vision/v1/ocr",
+        "note": "한국어 인식률이 더 좋음"
+      },
+      "input": "{{ $json.file }}",
+      "output": {
+        "extracted_text": "OCR로 추출된 한국어 텍스트",
+        "confidence": "신뢰도 점수"
+      }
+    },
+    {
+      "id": "3",
+      "name": "DB - 학생 정보 확인/생성",
+      "type": "n8n-nodes-base.postgres",
+      "description": "학생 정보 확인 또는 신규 생성",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO students (student_number, student_name) VALUES ($1, $2) ON CONFLICT (student_number) DO UPDATE SET student_name = $2 RETURNING student_id",
+        "additionalFields": {
+          "queryParameters": "={{ $json.student_number }},={{ $json.student_name }}"
+        }
+      }
+    },
+    {
+      "id": "4",
+      "name": "DB - 답안 저장",
+      "type": "n8n-nodes-base.postgres",
+      "description": "학생 답안 원본 및 OCR 텍스트 저장",
+      "parameters": {
+        "operation": "insert",
+        "table": "student_submissions",
+        "columns": "student_id, assignment_id, original_file_url, extracted_text",
+        "returnFields": "submission_id"
+      },
+      "input": {
+        "student_id": "{{ $('DB - 학생 정보 확인/생성').item.json.student_id }}",
+        "assignment_id": "{{ $json.assignment_id }}",
+        "original_file_url": "{{ $json.file_url }}",
+        "extracted_text": "{{ $('OCR - 텍스트 추출').item.json.extracted_text }}"
+      }
+    },
+    {
+      "id": "5",
+      "name": "RAG - 채점 기준 검색",
+      "type": "n8n-nodes-base.postgres",
+      "description": "벡터 검색으로 관련 채점 기준 가져오기",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT criteria_name, criteria_description, scoring_rule, examples FROM grading_criteria WHERE lesson_number = $1 ORDER BY embedding <=> (SELECT embedding FROM grading_criteria WHERE criteria_name = 'task_completion' LIMIT 1) LIMIT 10"
+      },
+      "note": "실제로는 OpenAI Embedding API로 쿼리를 벡터화한 후 검색"
+    },
+    {
+      "id": "6",
+      "name": "RAG - 문법 규칙 검색",
+      "type": "n8n-nodes-base.postgres",
+      "description": "해당 과의 문법 규칙 검색",
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT grammar_name, grammar_form, usage_description, score_weight, detection_pattern, examples FROM grammar_rules WHERE lesson_number = $1"
+      }
+    },
+    {
+      "id": "7",
+      "name": "OpenAI Embedding - 학생 답안",
+      "type": "n8n-nodes-base.openAi",
+      "description": "학생 답안을 벡터로 변환",
+      "parameters": {
+        "resource": "embedding",
+        "model": "text-embedding-3-small",
+        "input": "={{ $('OCR - 텍스트 추출').item.json.extracted_text }}"
+      }
+    },
+    {
+      "id": "8",
+      "name": "AI 채점 - GPT-4",
+      "type": "n8n-nodes-base.openAi",
+      "description": "GPT-4를 사용한 자동 채점",
+      "parameters": {
+        "resource": "chat",
+        "model": "gpt-4o",
+        "messages": {
+          "system": "당신은 한국어 교육 전문가이자 채점 전문가입니다. 서울대 한국어 플러스 2A 교재를 사용하는 외국인 학습자의 쓰기 답안을 채점합니다.",
+          "user": "={{ $('프롬프트 생성').item.json.grading_prompt }}"
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000,
+          "responseFormat": "json_object"
+        }
+      }
+    },
+    {
+      "id": "9",
+      "name": "프롬프트 생성",
+      "type": "n8n-nodes-base.code",
+      "description": "RAG 결과를 활용하여 채점 프롬프트 생성",
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "// 입력 데이터\nconst studentAnswer = $input.item.json.extracted_text;\nconst studentNumber = $input.item.json.student_number;\nconst studentName = $input.item.json.student_name;\nconst gradingCriteria = $('RAG - 채점 기준 검색').all();\nconst grammarRules = $('RAG - 문법 규칙 검색').all();\n\n// 문법 규칙 포맷팅\nconst grammarText = grammarRules.map((rule, idx) => {\n  return `${idx + 1}. ${rule.json.grammar_name} (${rule.json.score_weight}점)\n   - 형태: ${rule.json.grammar_form}\n   - 사용법: ${rule.json.usage_description}\n   - 예시: ${JSON.stringify(rule.json.examples.correct)}`;\n}).join('\\n\\n');\n\n// 필수 요소 포맷팅\nconst requiredElements = `\n- 이름 소개 (5점): '라고 합니다' 포함\n- 고향 위치 (5점): '고향', '있습니다' 등 포함\n- 소개하고 싶은 곳 (5점): '소개하고 싶은', '곳' 포함\n- 유명한 것 / 하고 싶은 말 (10점): '유명', '좋아' 등 포함\n`;\n\nconst modelAnswer = \"안녕하세요. 저는 다니엘이라고 합니다. 제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다. 하노이는 크지 않지만 사람들이 많고 활기찬 도시입니다. 제가 소개하고 싶은 곳은 호안끼엠 호수인데 경치가 아주 좋습니다. 제 고향은 쌀국수가 유명하지만 너무 맵지 않습니다. 저는 한국 친구들에게 제 고향을 소개하려고 이 글을 씁니다.\";\n\n// 전체 프롬프트 생성\nconst gradingPrompt = `\n### 과제 정보\n- 과: 2A-1과\n- 과제명: 제 고향\n- 필수 문장 수: 6문장\n\n### 학생 정보\n- 학생 번호: ${studentNumber}\n- 학생 이름: ${studentName}\n\n### 학생 답안\n${studentAnswer}\n\n### 채점 기준\n\n#### 1. 과제 수행도 (25점)\n다음 4가지 필수 요소가 모두 포함되어 있는지 확인하세요:\n${requiredElements}\n\n#### 2. 핵심 문법 사용 (30점)\n다음 4가지 문법이 정확하게 사용되었는지 확인하세요:\n\n${grammarText}\n\n**채점 규칙**:\n- 형태 정확 + 의미 적절 → 만점\n- 형태는 맞으나 의미 어색 → 50%\n- 미사용 또는 오류 → 0점\n\n#### 3. 내용 적절성 (15점)\n- 의미 이해 가능 (5점)\n- 내용 반복 없음 (5점)\n- 주제 일관성 (5점)\n\n#### 4. 조직력 (10점)\n- 문장 순서 자연스러움 (5점)\n- 연결 표현 사용 (5점)\n\n#### 5. 어휘 사용 (10점)\n- 수준에 맞는 어휘 (5점)\n- 과도한 반복 없음 (5점)\n\n#### 6. 문법 정확성 (10점)\n조사, 어미 오류 개수 (6문장 기준):\n- 0~1개: 10점\n- 2~3개: 7점\n- 4~5개: 4점\n- 6개 이상: 0점\n\n### 모범 답안 (참고용)\n${modelAnswer}\n\n---\n\n다음 JSON 형식으로 채점 결과를 출력하세요:\n\n{\n  \"student_info\": {\n    \"student_number\": \"${studentNumber}\",\n    \"student_name\": \"${studentName}\"\n  },\n  \"scores\": {\n    \"task_completion\": {\"score\": 0, \"max_score\": 25, \"details\": {}},\n    \"grammar_usage\": {\"score\": 0, \"max_score\": 30, \"details\": {}},\n    \"content_adequacy\": {\"score\": 0, \"max_score\": 15, \"details\": {}},\n    \"organization\": {\"score\": 0, \"max_score\": 10, \"details\": {}},\n    \"vocabulary\": {\"score\": 0, \"max_score\": 10, \"details\": {}},\n    \"grammar_accuracy\": {\"score\": 0, \"max_score\": 10, \"error_count\": 0, \"errors\": []},\n    \"total_score\": 0\n  },\n  \"feedback\": {\n    \"strengths\": [],\n    \"improvements\": [],\n    \"overall_comment\": \"\"\n  }\n}\n`;\n\nreturn [{\n  json: {\n    grading_prompt: gradingPrompt,\n    student_answer: studentAnswer,\n    student_number: studentNumber,\n    student_name: studentName\n  }\n}];"
+      }
+    },
+    {
+      "id": "10",
+      "name": "JSON 파싱",
+      "type": "n8n-nodes-base.code",
+      "description": "AI 채점 결과 파싱",
+      "parameters": {
+        "language": "javascript",
+        "jsCode": "const aiResponse = $input.item.json.choices[0].message.content;\nconst gradingResult = JSON.parse(aiResponse);\n\nreturn [{\n  json: gradingResult\n}];"
+      }
+    },
+    {
+      "id": "11",
+      "name": "DB - 채점 결과 저장",
+      "type": "n8n-nodes-base.postgres",
+      "description": "채점 결과를 DB에 저장",
+      "parameters": {
+        "operation": "insert",
+        "table": "grading_results",
+        "columns": "submission_id, task_completion_score, grammar_usage_score, content_adequacy_score, organization_score, vocabulary_score, grammar_accuracy_score, total_score, detailed_analysis, ai_feedback"
+      },
+      "input": {
+        "submission_id": "={{ $('DB - 답안 저장').item.json.submission_id }}",
+        "task_completion_score": "={{ $json.scores.task_completion.score }}",
+        "grammar_usage_score": "={{ $json.scores.grammar_usage.score }}",
+        "content_adequacy_score": "={{ $json.scores.content_adequacy.score }}",
+        "organization_score": "={{ $json.scores.organization.score }}",
+        "vocabulary_score": "={{ $json.scores.vocabulary.score }}",
+        "grammar_accuracy_score": "={{ $json.scores.grammar_accuracy.score }}",
+        "total_score": "={{ $json.scores.total_score }}",
+        "detailed_analysis": "={{ JSON.stringify($json.scores) }}",
+        "ai_feedback": "={{ JSON.stringify($json.feedback) }}"
+      }
+    },
+    {
+      "id": "12",
+      "name": "DB - 상태 업데이트",
+      "type": "n8n-nodes-base.postgres",
+      "description": "답안 상태를 'graded'로 변경",
+      "parameters": {
+        "operation": "update",
+        "table": "student_submissions",
+        "updateKey": "submission_id",
+        "columns": "status"
+      },
+      "input": {
+        "submission_id": "={{ $('DB - 답안 저장').item.json.submission_id }}",
+        "status": "graded"
+      }
+    },
+    {
+      "id": "13",
+      "name": "응답 생성",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "description": "채점 결과를 응답으로 반환",
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($('JSON 파싱').item.json) }}"
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - 답안 제출": {
+      "main": [
+        [
+          {
+            "node": "OCR - 텍스트 추출",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR - 텍스트 추출": {
+      "main": [
+        [
+          {
+            "node": "DB - 학생 정보 확인/생성",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "OpenAI Embedding - 학생 답안",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - 학생 정보 확인/생성": {
+      "main": [
+        [
+          {
+            "node": "DB - 답안 저장",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - 답안 저장": {
+      "main": [
+        [
+          {
+            "node": "RAG - 채점 기준 검색",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG - 채점 기준 검색": {
+      "main": [
+        [
+          {
+            "node": "RAG - 문법 규칙 검색",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "RAG - 문법 규칙 검색": {
+      "main": [
+        [
+          {
+            "node": "프롬프트 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "프롬프트 생성": {
+      "main": [
+        [
+          {
+            "node": "AI 채점 - GPT-4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI 채점 - GPT-4": {
+      "main": [
+        [
+          {
+            "node": "JSON 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON 파싱": {
+      "main": [
+        [
+          {
+            "node": "DB - 채점 결과 저장",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - 채점 결과 저장": {
+      "main": [
+        [
+          {
+            "node": "DB - 상태 업데이트",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DB - 상태 업데이트": {
+      "main": [
+        [
+          {
+            "node": "응답 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

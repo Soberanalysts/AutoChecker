@@ -1,0 +1,240 @@
+{
+  "lesson": "2A-1과",
+  "assignment": {
+    "title": "제 고향",
+    "required_elements": [
+      {
+        "element": "이름 소개",
+        "score": 5,
+        "keywords": ["이름", "라고 합니다", "저는"],
+        "example": "저는 다니엘이라고 합니다"
+      },
+      {
+        "element": "고향 위치",
+        "score": 5,
+        "keywords": ["고향", "있습니다", "위치", "북쪽", "남쪽", "동쪽", "서쪽"],
+        "example": "제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다"
+      },
+      {
+        "element": "소개하고 싶은 곳",
+        "score": 5,
+        "keywords": ["소개하고 싶은", "곳", "장소", "인데"],
+        "example": "제가 소개하고 싶은 곳은 호안끼엠 호수인데 경치가 아주 좋습니다"
+      },
+      {
+        "element": "유명한 것 / 하고 싶은 말",
+        "score": 10,
+        "keywords": ["유명", "좋아", "생각", "려고"],
+        "example": "제 고향은 쌀국수가 유명하지만 너무 맵지 않습니다"
+      }
+    ],
+    "required_sentences": 6,
+    "sentence_range": {
+      "min": 5,
+      "max": 8
+    }
+  },
+  "grammar_rules": [
+    {
+      "grammar_id": "G1",
+      "name": "명(이)라고 하다",
+      "score": 8,
+      "forms": {
+        "with_consonant": "명사(받침 O) + 이라고 하다",
+        "without_consonant": "명사(받침 X) + 라고 하다"
+      },
+      "usage": "명사를 인용하여 이름·정의·정체성·호칭을 전달할 때 사용",
+      "detection_patterns": [
+        "이라고 합니다",
+        "이라고 해요",
+        "라고 합니다",
+        "라고 해요"
+      ],
+      "examples": {
+        "correct": [
+          "저는 다니엘이라고 합니다",
+          "이 학교 이름은 경기자동차과학고등학교라고 해요"
+        ],
+        "incorrect": [
+          {
+            "text": "학생라고 하다",
+            "error": "받침 규칙 오류",
+            "correction": "학생이라고 하다"
+          },
+          {
+            "text": "예쁘다고 하다",
+            "error": "동사/형용사에는 사용 불가",
+            "correction": "명사에만 사용 가능"
+          }
+        ]
+      },
+      "scoring": {
+        "full": "형태 정확 + 의미 적절",
+        "half": "형태는 맞으나 의미 어색",
+        "zero": "미사용 또는 오류"
+      }
+    },
+    {
+      "grammar_id": "G2",
+      "name": "명+인데",
+      "score": 8,
+      "forms": {
+        "pattern": "명사 + 인데 + 설명"
+      },
+      "usage": "명사에 대한 배경 정보나 상황을 설명할 때 사용",
+      "detection_patterns": [
+        "인데",
+        "명사인데"
+      ],
+      "examples": {
+        "correct": [
+          "고향은 하노이인데 베트남의 북쪽에 있습니다",
+          "곳은 호수인데 경치가 아주 좋습니다"
+        ],
+        "incorrect": [
+          {
+            "text": "크다인데",
+            "error": "형용사에 인데 사용",
+            "correction": "명사 뒤에만 사용"
+          }
+        ]
+      },
+      "scoring": {
+        "full": "명사 + 인데 + 적절한 설명",
+        "half": "형태는 맞으나 문맥 어색",
+        "zero": "미사용 또는 오류"
+      }
+    },
+    {
+      "grammar_id": "G3",
+      "name": "-지 않다",
+      "score": 7,
+      "forms": {
+        "pattern": "형용사/동사 어간 + 지 않다"
+      },
+      "usage": "부정 표현",
+      "detection_patterns": [
+        "지 않다",
+        "지 않습니다",
+        "지 않아요",
+        "지 않지만"
+      ],
+      "examples": {
+        "correct": [
+          "크지 않지만 사람들이 많습니다",
+          "맵지 않습니다",
+          "조용하지 않지만 살기 좋습니다"
+        ],
+        "incorrect": []
+      },
+      "scoring": {
+        "full": "형용사/동사 + 지 않다 정확 사용",
+        "half": "형태는 맞으나 의미 어색",
+        "zero": "미사용 또는 오류"
+      }
+    },
+    {
+      "grammar_id": "G4",
+      "name": "동사-(으)려고",
+      "score": 7,
+      "forms": {
+        "with_consonant": "동사 어간(받침 O) + 으려고",
+        "without_consonant": "동사 어간(받침 X) + 려고"
+      },
+      "usage": "의도·목적 표현",
+      "detection_patterns": [
+        "려고",
+        "으려고"
+      ],
+      "examples": {
+        "correct": [
+          "소개하려고 이 글을 씁니다",
+          "만나려고 학교에 갔습니다"
+        ],
+        "incorrect": [
+          {
+            "text": "예쁘려고",
+            "error": "형용사에는 사용 불가",
+            "correction": "동사에만 사용 가능"
+          }
+        ]
+      },
+      "scoring": {
+        "full": "동사 + (으)려고 + 목적 명확",
+        "half": "형태는 맞으나 의미 어색",
+        "zero": "미사용 또는 오류"
+      }
+    }
+  ],
+  "scoring_criteria": {
+    "task_completion": {
+      "name": "과제 수행도",
+      "total_score": 25,
+      "description": "필수 요소 4가지 포함 여부",
+      "evaluation": "각 요소 관련 핵심 키워드 1개 이상 포함 시 점수 부여"
+    },
+    "grammar_usage": {
+      "name": "핵심 문법 사용",
+      "total_score": 30,
+      "description": "1과 문법 4개 사용 여부 및 정확성",
+      "rules": [
+        "형태 사용 + 의미 적절 → 만점",
+        "형태는 맞으나 의미 어색 → 50%",
+        "미사용 → 0점"
+      ]
+    },
+    "content_adequacy": {
+      "name": "내용 적절성",
+      "total_score": 15,
+      "criteria": [
+        {"name": "의미 이해 가능", "score": 5},
+        {"name": "내용 반복 없음", "score": 5},
+        {"name": "주제 일관성", "score": 5}
+      ],
+      "ai_checks": [
+        "문장 간 의미 충돌 여부",
+        "동일 문장/표현 반복률"
+      ]
+    },
+    "organization": {
+      "name": "조직력",
+      "total_score": 10,
+      "criteria": [
+        {"name": "문장 순서 자연스러움", "score": 5},
+        {"name": "연결 표현 사용", "score": 5}
+      ]
+    },
+    "vocabulary": {
+      "name": "어휘 사용",
+      "total_score": 10,
+      "criteria": [
+        {"name": "수준에 맞는 어휘", "score": 5},
+        {"name": "과도한 반복 없음", "score": 5}
+      ]
+    },
+    "grammar_accuracy": {
+      "name": "문법 정확성",
+      "total_score": 10,
+      "scoring_table": [
+        {"errors": "0-1개", "score": 10},
+        {"errors": "2-3개", "score": 7},
+        {"errors": "4-5개", "score": 4},
+        {"errors": "6개 이상", "score": 0}
+      ],
+      "description": "조사·어미 오류 개수 기준 (6문장 기준)"
+    }
+  },
+  "model_answer": "안녕하세요. 저는 다니엘이라고 합니다. 제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다. 하노이는 크지 않지만 사람들이 많고 활기찬 도시입니다. 제가 소개하고 싶은 곳은 호안끼엠 호수인데 경치가 아주 좋습니다. 제 고향은 쌀국수가 유명하지만 너무 맵지 않습니다. 저는 한국 친구들에게 제 고향을 소개하려고 이 글을 씁니다.",
+  "feedback_templates": {
+    "excellent": [
+      "✔ 1과의 핵심 문법을 잘 사용했습니다.",
+      "✔ 고향 소개가 구체적입니다.",
+      "✔ -(으)려고를 사용해 목적을 잘 나타냈어요."
+    ],
+    "needs_improvement": [
+      "🔸 -지 않다 표현을 한 번 더 연습해 보세요.",
+      "🔸 연결 표현을 더 사용하면 좋겠습니다.",
+      "🔸 문장이 조금 짧습니다. 더 구체적으로 써 보세요."
+    ]
+  }
+}
