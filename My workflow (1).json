@@ -1,0 +1,321 @@
+{
+  "name": "My workflow",
+  "nodes": [
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -464,
+        -96
+      ],
+      "id": "686a1c00-8356-42a0-a246-a7e39fffc33c",
+      "name": "When clicking ‘Execute workflow’"
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-NANO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "농담하나 기깔나게 뽑아보도록"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        112
+      ],
+      "id": "71698f44-fb01-4ba0-8244-d6284490e276",
+      "name": "농담노드",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-NANO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "기본적인 경제상식 하나만 말해줘"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        -96
+      ],
+      "id": "259729d1-1ace-4cbe-a368-e66747a7ca8e",
+      "name": "상식노드",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "U0A4FRKK281",
+          "mode": "list",
+          "cachedResultName": "shna.imsl"
+        },
+        "text": "=농담 : \n{{ $('농담노드').item.json.output[0].content[0].text }}\n_______\n\n평가 :\n{{ $json.output[0].content[0].text }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        656,
+        112
+      ],
+      "id": "81d3e400-f9c8-41ac-bd69-43e159907161",
+      "name": "Send a message",
+      "webhookId": "c78d9b01-fc75-4ae4-a719-87dd39e5c118",
+      "credentials": {
+        "slackApi": {
+          "id": "MqcPVCAsO272WpaM",
+          "name": "my-n8n-workspace-bot 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-NANO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "=다음 답변을 평가해줘\n{{ $json.output[0].content[0].text }}"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        304,
+        112
+      ],
+      "id": "747dc0cc-71f9-42ee-9bfe-9156d5e5042e",
+      "name": "평가 노드",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-NANO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "나스닥 100에 해당하는 종목을 나열하고 그중에서 랜덤하게 하나를 골라봐"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        -48,
+        -272
+      ],
+      "id": "039be372-d25b-4df6-997a-93fffa38c7af",
+      "name": "종목 노드",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "modelId": {
+          "__rl": true,
+          "value": "gpt-4.1-nano",
+          "mode": "list",
+          "cachedResultName": "GPT-4.1-NANO"
+        },
+        "responses": {
+          "values": [
+            {
+              "content": "={{ $json.output[0].content[0].text }}\n\n해당 종목의 섹터, PER, PBR, ROE를 말하고 오늘날짜기준 가격을 말해줘"
+            }
+          ]
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.1,
+      "position": [
+        304,
+        -272
+      ],
+      "id": "5650008f-a091-4b4f-9786-6e4d8555c84a",
+      "name": "분석 노드",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "select": "user",
+        "user": {
+          "__rl": true,
+          "value": "U0A4FRKK281",
+          "mode": "list",
+          "cachedResultName": "shna.imsl"
+        },
+        "text": "={{ $json.output[0].content[0].text }}",
+        "otherOptions": {}
+      },
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.4,
+      "position": [
+        656,
+        -272
+      ],
+      "id": "3e1b265b-955d-4598-ba8a-e1417b37fe22",
+      "name": "Send a message1",
+      "webhookId": "34b82552-66a2-4718-8267-cfd0745187e6",
+      "credentials": {
+        "slackApi": {
+          "id": "CNLuPxo0qQaL67Rn",
+          "name": "SoberAnalysts"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When clicking ‘Execute workflow’": {
+      "main": [
+        [
+          {
+            "node": "농담노드",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "종목 노드",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "상식노드",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "상식노드": {
+      "main": [
+        []
+      ]
+    },
+    "농담노드": {
+      "main": [
+        [
+          {
+            "node": "평가 노드",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "평가 노드": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "종목 노드": {
+      "main": [
+        [
+          {
+            "node": "분석 노드",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "분석 노드": {
+      "main": [
+        [
+          {
+            "node": "Send a message1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a0643b67-606f-4895-a814-33a3be339086",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "a1134da49519b4f5d5c9471917ddf660cc01fdde452251129b50f527a45b3b73"
+  },
+  "id": "SoZIfMR9bZ31zxs4",
+  "tags": []
+}

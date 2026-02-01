@@ -1,0 +1,162 @@
+{
+  "name": "한국어 쓰기 자동 채점 워크플로우",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "submit-answer",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-submit",
+      "name": "Webhook - 답안 제출",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 테스트용: OCR 대신 직접 입력된 텍스트 사용\nconst inputData = $input.all();\nconst item = inputData[0].json;\n\nreturn [{\n  json: {\n    student_number: item.student_number || \"20240001\",\n    student_name: item.student_name || \"테스트학생\",\n    assignment_id: item.assignment_id || \"2A-1\",\n    extracted_text: item.text || item.extracted_text || \"안녕하세요. 저는 다니엘이라고 합니다. 제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다.\",\n    file_url: item.file_url || \"test.pdf\"\n  }\n}];"
+      },
+      "id": "ocr-extract",
+      "name": "OCR - 텍스트 추출 (테스트)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 프롬프트 생성\nconst studentAnswer = $input.item.json.extracted_text;\nconst studentNumber = $input.item.json.student_number;\nconst studentName = $input.item.json.student_name;\n\nconst gradingPrompt = `\n### 과제 정보\n- 과: 2A-1과\n- 과제명: 제 고향\n- 필수 문장 수: 6문장\n\n### 학생 정보\n- 학생 번호: ${studentNumber}\n- 학생 이름: ${studentName}\n\n### 학생 답안\n${studentAnswer}\n\n### 채점 기준\n\n#### 1. 과제 수행도 (25점)\n- 이름 소개 (5점): '라고 합니다' 포함\n- 고향 위치 (5점): '고향', '있습니다' 등 포함\n- 소개하고 싶은 곳 (5점): '소개하고 싶은', '곳' 포함\n- 유명한 것 / 하고 싶은 말 (10점): '유명', '좋아' 등 포함\n\n#### 2. 핵심 문법 사용 (30점)\n1. -는데/-은데 (7.5점): 대조/배경 표현\n2. -지만 (7.5점): 반대 상황 표현\n3. -(으)려고 (7.5점): 의도 표현\n4. -라고 하다 (7.5점): 인용 표현\n\n#### 3. 내용 적절성 (15점)\n- 의미 이해 가능 (5점)\n- 내용 반복 없음 (5점)\n- 주제 일관성 (5점)\n\n#### 4. 조직력 (10점)\n- 문장 순서 자연스러움 (5점)\n- 연결 표현 사용 (5점)\n\n#### 5. 어휘 사용 (10점)\n- 수준에 맞는 어휘 (5점)\n- 과도한 반복 없음 (5점)\n\n#### 6. 문법 정확성 (10점)\n조사, 어미 오류 개수 (6문장 기준):\n- 0~1개: 10점\n- 2~3개: 7점\n- 4~5개: 4점\n- 6개 이상: 0점\n\n---\n\n다음 JSON 형식으로 채점 결과를 출력하세요:\n\n{\n  \"student_info\": {\n    \"student_number\": \"${studentNumber}\",\n    \"student_name\": \"${studentName}\"\n  },\n  \"scores\": {\n    \"task_completion\": {\"score\": 0, \"max_score\": 25, \"details\": \"각 필수 요소별 점수 설명\"},\n    \"grammar_usage\": {\"score\": 0, \"max_score\": 30, \"details\": \"각 문법별 사용 여부와 점수\"},\n    \"content_adequacy\": {\"score\": 0, \"max_score\": 15, \"details\": \"내용 적절성 평가\"},\n    \"organization\": {\"score\": 0, \"max_score\": 10, \"details\": \"조직력 평가\"},\n    \"vocabulary\": {\"score\": 0, \"max_score\": 10, \"details\": \"어휘 사용 평가\"},\n    \"grammar_accuracy\": {\"score\": 0, \"max_score\": 10, \"error_count\": 0, \"errors\": []},\n    \"total_score\": 0\n  },\n  \"feedback\": {\n    \"strengths\": [\"잘한 점 1\", \"잘한 점 2\"],\n    \"improvements\": [\"개선할 점 1\", \"개선할 점 2\"],\n    \"overall_comment\": \"전체적인 평가\"\n  }\n}\n`;\n\nreturn [{\n  json: {\n    grading_prompt: gradingPrompt,\n    student_answer: studentAnswer,\n    student_number: studentNumber,\n    student_name: studentName\n  }\n}];"
+      },
+      "id": "prompt-generation",
+      "name": "프롬프트 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "당신은 한국어 교육 전문가이자 채점 전문가입니다. 서울대 한국어 플러스 2A 교재를 사용하는 외국인 학습자의 쓰기 답안을 채점합니다."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.grading_prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.3,
+          "maxTokens": 2000
+        },
+        "requestOptions": {
+          "response_format": "json_object"
+        }
+      },
+      "id": "ai-grading",
+      "name": "AI 채점 - GPT-4",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.2,
+      "position": [850, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai_credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI 응답 파싱\nconst aiResponse = $input.item.json.choices[0].message.content;\nconst gradingResult = JSON.parse(aiResponse);\n\nreturn [{\n  json: gradingResult\n}];"
+      },
+      "id": "json-parsing",
+      "name": "JSON 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1050, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "id": "respond-webhook",
+      "name": "응답 생성",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1250, 300]
+    }
+  ],
+  "connections": {
+    "Webhook - 답안 제출": {
+      "main": [
+        [
+          {
+            "node": "OCR - 텍스트 추출 (테스트)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR - 텍스트 추출 (테스트)": {
+      "main": [
+        [
+          {
+            "node": "프롬프트 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "프롬프트 생성": {
+      "main": [
+        [
+          {
+            "node": "AI 채점 - GPT-4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI 채점 - GPT-4": {
+      "main": [
+        [
+          {
+            "node": "JSON 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JSON 파싱": {
+      "main": [
+        [
+          {
+            "node": "응답 생성",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-29T06:45:00.000Z",
+  "versionId": "1"
+}

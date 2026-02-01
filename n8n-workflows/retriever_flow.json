@@ -1,0 +1,207 @@
+{
+  "name": "Retriever Flow",
+  "nodes": [
+    {
+      "parameters": {
+        "triggerOn": "messageReceived"
+      },
+      "id": "chat-trigger",
+      "name": "When chat message received",
+      "type": "n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1,
+      "position": [240, 360],
+      "webhookId": "chat-webhook"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.chatInput }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "당신은 한국어 쓰기 자동 채점 시스템의 AI 어시스턴트입니다. 사용자의 질문에 답변하고, 필요한 경우 데이터베이스에서 정보를 검색하거나 저장합니다."
+        }
+      },
+      "id": "ai-agent",
+      "name": "AI Agent",
+      "type": "n8n-nodes-langchain.agent",
+      "typeVersion": 1.7,
+      "position": [460, 360]
+    },
+    {
+      "parameters": {
+        "model": "gpt-4o",
+        "options": {
+          "temperature": 0.7,
+          "maxTokens": 2000
+        }
+      },
+      "id": "openai-chat-model",
+      "name": "OpenAI Chat Model",
+      "type": "n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1,
+      "position": [240, 560],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai_credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "id": "simple-memory",
+      "name": "Simple Memory",
+      "type": "n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.2,
+      "position": [340, 560]
+    },
+    {
+      "parameters": {
+        "name": "이용권저장",
+        "description": "사용자의 이용권 정보를 데이터베이스에 저장합니다. 이용권 종류, 기간, 금액 등의 정보를 입력받습니다.",
+        "toolCode": "const toolInput = $input.item.json;\n\n// 데이터베이스에 저장하는 로직 (실제로는 PostgreSQL 노드 사용)\nconst result = {\n  success: true,\n  message: `이용권 정보가 저장되었습니다.`,\n  data: toolInput\n};\n\nreturn result;",
+        "specifyInputSchema": true,
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"subscription_type\": {\n      \"type\": \"string\",\n      \"description\": \"이용권 종류\"\n    },\n    \"duration\": {\n      \"type\": \"string\",\n      \"description\": \"이용 기간\"\n    },\n    \"price\": {\n      \"type\": \"number\",\n      \"description\": \"가격\"\n    }\n  },\n  \"required\": [\"subscription_type\", \"duration\", \"price\"]\n}"
+      },
+      "id": "tool-subscription-save",
+      "name": "이용권저장",
+      "type": "n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [520, 560]
+    },
+    {
+      "parameters": {
+        "name": "총사업장",
+        "description": "전체 사업장 목록을 조회합니다. 필터 조건을 입력하면 해당하는 사업장만 반환합니다.",
+        "toolCode": "const toolInput = $input.item.json;\n\n// 데이터베이스 조회 로직 (실제로는 PostgreSQL 노드 사용)\nconst result = {\n  success: true,\n  total_count: 150,\n  data: [\n    { id: 1, name: \"사업장 A\", location: \"서울\", type: \"교육\" },\n    { id: 2, name: \"사업장 B\", location: \"부산\", type: \"IT\" }\n  ]\n};\n\nreturn result;",
+        "specifyInputSchema": true,
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"location\": {\n      \"type\": \"string\",\n      \"description\": \"지역 필터 (선택)\"\n    },\n    \"type\": {\n      \"type\": \"string\",\n      \"description\": \"업종 필터 (선택)\"\n    }\n  }\n}"
+      },
+      "id": "tool-total-business",
+      "name": "총사업장",
+      "type": "n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [640, 560]
+    },
+    {
+      "parameters": {
+        "name": "업종검색",
+        "description": "특정 업종에 대한 정보를 검색합니다. 업종명을 입력하면 관련 정보를 반환합니다.",
+        "toolCode": "const toolInput = $input.item.json;\nconst industry = toolInput.industry_name;\n\n// 업종 검색 로직\nconst result = {\n  success: true,\n  industry_name: industry,\n  description: `${industry}에 대한 정보입니다.`,\n  related_businesses: [\n    { name: \"회사1\", size: \"대기업\" },\n    { name: \"회사2\", size: \"중소기업\" }\n  ]\n};\n\nreturn result;",
+        "specifyInputSchema": true,
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"industry_name\": {\n      \"type\": \"string\",\n      \"description\": \"검색할 업종명\"\n    }\n  },\n  \"required\": [\"industry_name\"]\n}"
+      },
+      "id": "tool-industry-search",
+      "name": "업종검색",
+      "type": "n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [760, 560]
+    },
+    {
+      "parameters": {
+        "name": "대표자저장",
+        "description": "사업장 대표자 정보를 데이터베이스에 저장합니다. 이름, 연락처, 이메일 등의 정보를 입력받습니다.",
+        "toolCode": "const toolInput = $input.item.json;\n\n// 대표자 정보 저장 로직\nconst result = {\n  success: true,\n  message: `대표자 정보가 저장되었습니다.`,\n  data: {\n    name: toolInput.name,\n    contact: toolInput.contact,\n    email: toolInput.email,\n    business_id: toolInput.business_id\n  }\n};\n\nreturn result;",
+        "specifyInputSchema": true,
+        "inputSchema": "{\n  \"type\": \"object\",\n  \"properties\": {\n    \"name\": {\n      \"type\": \"string\",\n      \"description\": \"대표자 이름\"\n    },\n    \"contact\": {\n      \"type\": \"string\",\n      \"description\": \"연락처\"\n    },\n    \"email\": {\n      \"type\": \"string\",\n      \"description\": \"이메일\"\n    },\n    \"business_id\": {\n      \"type\": \"number\",\n      \"description\": \"사업장 ID\"\n    }\n  },\n  \"required\": [\"name\", \"contact\", \"business_id\"]\n}"
+      },
+      "id": "tool-ceo-save",
+      "name": "대표자저장",
+      "type": "n8n-nodes-langchain.toolCode",
+      "typeVersion": 1,
+      "position": [880, 560]
+    }
+  ],
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이용권저장": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "총사업장": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "업종검색": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "대표자저장": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-29T07:30:00.000Z",
+  "versionId": "1"
+}

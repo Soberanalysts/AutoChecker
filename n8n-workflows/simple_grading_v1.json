@@ -1,0 +1,142 @@
+{
+  "name": "간단한 채점 - MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grade",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-input",
+      "name": "텍스트 입력",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "simple-grade"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 입력된 학생 답안\nconst studentAnswer = $input.item.json.body.answer || $input.item.json.answer || \"답안이 입력되지 않았습니다.\";\n\n// 채점 기준 (하드코딩)\nconst gradingPrompt = `\n# 한국어 쓰기 과제 채점\n\n## 과제 정보\n- 과: 서울대 한국어 플러스 2A-1과\n- 과제명: 제 고향\n- 필수 문장 수: 6문장 이상\n\n## 학생 답안\n${studentAnswer}\n\n---\n\n## 채점 기준 (총 100점)\n\n### 1. 과제 수행도 (25점)\n다음 4가지 필수 요소가 모두 포함되어 있는지 확인:\n- **이름 소개** (5점): '-라고 하다' 또는 '-이에요/예요' 사용\n- **고향 위치** (5점): '고향', '있습니다' 등으로 위치 설명\n- **고향 특징** (10점): 고향에 대한 설명 (크기, 분위기, 특징 등)\n- **소개하고 싶은 내용** (5점): 유명한 것, 좋아하는 점 등\n\n### 2. 핵심 문법 사용 (30점)\n다음 4가지 문법이 **정확하게** 사용되었는지 확인:\n\n1. **-는데/-은데** (7.5점)\n   - 용도: 배경 설명, 대조\n   - 예시: \"하노이인데 베트남의 북쪽에 있습니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n2. **-지만** (7.5점)\n   - 용도: 반대 상황 표현\n   - 예시: \"크지 않지만 사람들이 많습니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n3. **-(으)려고** (7.5점)\n   - 용도: 의도 표현\n   - 예시: \"소개하려고 이 글을 씁니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n4. **-라고 하다** (7.5점)\n   - 용도: 이름 소개, 인용\n   - 예시: \"다니엘이라고 합니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n### 3. 내용 적절성 (15점)\n- 의미가 이해 가능한가? (5점)\n- 내용에 불필요한 반복이 없는가? (5점)\n- 주제에서 벗어나지 않았는가? (5점)\n\n### 4. 조직력 (10점)\n- 문장 순서가 자연스러운가? (5점)\n- 연결 표현이 적절하게 사용되었는가? (5점)\n\n### 5. 어휘 사용 (10점)\n- 2A 수준에 맞는 어휘를 사용했는가? (5점)\n- 같은 어휘를 과도하게 반복하지 않았는가? (5점)\n\n### 6. 문법 정확성 (10점)\n**조사, 어미 오류 개수 기준** (6문장 기준):\n- 0~1개 오류: 10점\n- 2~3개 오류: 7점\n- 4~5개 오류: 4점\n- 6개 이상 오류: 0점\n\n---\n\n## 모범 답안 (참고용)\n안녕하세요. 저는 다니엘이라고 합니다. 제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다. 하노이는 크지 않지만 사람들이 많고 활기찬 도시입니다. 제가 소개하고 싶은 곳은 호안끼엠 호수인데 경치가 아주 좋습니다. 제 고향은 쌀국수가 유명하지만 너무 맵지 않습니다. 저는 한국 친구들에게 제 고향을 소개하려고 이 글을 씁니다.\n\n---\n\n## 출력 형식\n\n반드시 아래 JSON 형식으로만 출력하세요:\n\n{\n  \"scores\": {\n    \"task_completion\": {\n      \"score\": 0,\n      \"max_score\": 25,\n      \"details\": \"이름 소개: 5/5, 고향 위치: 5/5, 고향 특징: 8/10, 소개 내용: 4/5\"\n    },\n    \"grammar_usage\": {\n      \"score\": 0,\n      \"max_score\": 30,\n      \"details\": \"-는데/-은데: 7.5/7.5 (사용 정확), -지만: 7.5/7.5 (사용 정확), -(으)려고: 0/7.5 (미사용), -라고 하다: 7.5/7.5 (사용 정확)\"\n    },\n    \"content_adequacy\": {\n      \"score\": 0,\n      \"max_score\": 15,\n      \"details\": \"의미 이해 가능: 5/5, 반복 없음: 4/5, 주제 일관성: 5/5\"\n    },\n    \"organization\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"details\": \"문장 순서: 5/5, 연결 표현: 4/5\"\n    },\n    \"vocabulary\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"details\": \"수준 적절성: 5/5, 반복 회피: 4/5\"\n    },\n    \"grammar_accuracy\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"error_count\": 0,\n      \"errors\": [\"오류 예시 1\", \"오류 예시 2\"]\n    },\n    \"total_score\": 0\n  },\n  \"feedback\": {\n    \"strengths\": [\n      \"잘한 점 1\",\n      \"잘한 점 2\"\n    ],\n    \"improvements\": [\n      \"개선할 점 1\",\n      \"개선할 점 2\"\n    ],\n    \"overall_comment\": \"전체적인 평가를 2-3문장으로 작성\"\n  }\n}\n`;\n\nreturn [{\n  json: {\n    student_answer: studentAnswer,\n    grading_prompt: gradingPrompt\n  }\n}];"
+      },
+      "id": "prepare-prompt",
+      "name": "프롬프트 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [440, 300]
+    },
+    {
+      "parameters": {
+        "resource": "text",
+        "operation": "message",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "system",
+              "content": "당신은 한국어 교육 전문가이자 채점 전문가입니다. 서울대 한국어 플러스 2A 교재를 사용하는 외국인 학습자의 쓰기 답안을 채점합니다. 주어진 채점 기준을 정확히 따라 공정하게 채점하세요."
+            },
+            {
+              "role": "user",
+              "content": "={{ $json.grading_prompt }}"
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0.2,
+          "maxTokens": 2000
+        },
+        "requestOptions": {
+          "response_format": "json_object"
+        }
+      },
+      "id": "gpt4-grading",
+      "name": "GPT-4 채점",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.2,
+      "position": [640, 300],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai_credential",
+          "name": "OpenAI API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// GPT-4 응답 파싱\nconst aiResponse = $input.item.json.choices[0].message.content;\nlet gradingResult;\n\ntry {\n  gradingResult = JSON.parse(aiResponse);\n} catch (error) {\n  gradingResult = {\n    error: \"JSON 파싱 실패\",\n    raw_response: aiResponse\n  };\n}\n\n// 학생 답안도 함께 반환\ngradingResult.student_answer = $('프롬프트 준비').item.json.student_answer;\n\nreturn [{\n  json: gradingResult\n}];"
+      },
+      "id": "parse-result",
+      "name": "결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [840, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}"
+      },
+      "id": "webhook-response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1040, 300]
+    }
+  ],
+  "connections": {
+    "텍스트 입력": {
+      "main": [
+        [
+          {
+            "node": "프롬프트 준비",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "프롬프트 준비": {
+      "main": [
+        [
+          {
+            "node": "GPT-4 채점",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GPT-4 채점": {
+      "main": [
+        [
+          {
+            "node": "결과 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "결과 파싱": {
+      "main": [
+        [
+          {
+            "node": "결과 반환",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "pinData": {},
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "tags": [],
+  "triggerCount": 0,
+  "updatedAt": "2026-01-29T07:45:00.000Z",
+  "versionId": "1"
+}
