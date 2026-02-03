@@ -2,7 +2,7 @@
 
 # 직접 OpenAI API 테스트 (n8n 없이)
 
-IMAGE_FILE="/Users/imseongjin/AutoChecker/example/쓰기 채점_예문 (1).jpg"
+IMAGE_FILE="/Users/imseongjin/AutoChecker/example/쓰기 채점_예문 (2).jpg"
 OPENAI_API_KEY="${OPENAI_API_KEY}"
 
 echo "==================================="

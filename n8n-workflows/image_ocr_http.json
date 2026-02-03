@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "jsCode": "// 이미지를 base64로 준비 (개선 버전)\nconst items = $input.all();\nconst item = items[0];\n\n// Binary data 확인\nif (!item.binary || !item.binary.data) {\n  throw new Error('이미지 데이터가 없습니다. Webhook으로 이미지를 전송했는지 확인하세요.');\n}\n\nconst binaryData = item.binary.data;\n\n// Base64 인코딩\nlet imageBase64;\n\n// n8n의 binary data는 이미 buffer 형태\nif (binaryData.data) {\n  // data 필드가 있으면 그것을 사용\n  if (typeof binaryData.data === 'string') {\n    imageBase64 = binaryData.data;\n  } else if (Buffer.isBuffer(binaryData.data)) {\n    imageBase64 = binaryData.data.toString('base64');\n  } else {\n    imageBase64 = Buffer.from(binaryData.data).toString('base64');\n  }\n} else {\n  // binary data 자체를 인코딩\n  imageBase64 = Buffer.from(binaryData).toString('base64');\n}\n\n// MIME type (image/jpeg는 정상)\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\n\nconsole.log('이미지 준비 완료:', {\n  fileName,\n  mimeType,\n  base64Length: imageBase64.length,\n  sizeKB: Math.round(imageBase64.length / 1024)\n});\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName\n  }\n}];"
+        "jsCode": "// 이미지를 base64로 준비\nconst item = $input.first();\n\n// Binary data 확인\nif (!item.binary || !item.binary.data) {\n  throw new Error('이미지 데이터가 없습니다.');\n}\n\nconst binaryData = item.binary.data;\n\n// n8n의 getBinaryDataBuffer helper 사용\nconst binaryDataBuffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst imageBase64 = binaryDataBuffer.toString('base64');\n\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\n\nconsole.log('이미지 base64 변환 완료:', {\n  fileName,\n  mimeType,\n  base64Length: imageBase64.length,\n  sizeKB: Math.round(imageBase64.length / 1024)\n});\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName\n  }\n}];"
       },
       "id": "prepare-image",
       "name": "이미지 준비",
@@ -42,7 +42,7 @@
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ \n  const data = $json;\n  const imageUrl = `data:${data.mime_type};base64,${data.image_base64}`;\n  \n  return JSON.stringify({\n    model: 'gpt-4o',\n    messages: [\n      {\n        role: 'user',\n        content: [\n          {\n            type: 'text',\n            text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n          },\n          {\n            type: 'image_url',\n            image_url: {\n              url: imageUrl\n            }\n          }\n        ]\n      }\n    ],\n    max_tokens: 4096,\n    temperature: 0\n  });\n}}",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o',\n  messages: [\n    {\n      role: 'user',\n      content: [\n        {\n          type: 'text',\n          text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n        },\n        {\n          type: 'image_url',\n          image_url: {\n            url: 'data:' + $json.mime_type + ';base64,' + $json.image_base64\n          }\n        }\n      ]\n    }\n  ],\n  max_tokens: 4096,\n  temperature: 0\n}) }}",
         "options": {}
       },
       "id": "openai-vision",
