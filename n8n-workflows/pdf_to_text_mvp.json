@@ -1,0 +1,67 @@
+{
+  "name": "PDF to Text - MVP",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pdf-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-pdf",
+      "name": "PDF 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [32, 176],
+      "webhookId": "pdf-extract"
+    },
+    {
+      "parameters": {
+        "operation": "convert",
+        "options": {}
+      },
+      "id": "extract-text",
+      "name": "PDF 텍스트 추출",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 추출된 텍스트 정리\nconst rawText = $input.first().json.text || $input.first().binary?.data?.toString() || \"\";\n\n// 기본적인 텍스트 정리\nconst cleanedText = rawText\n  .replace(/\\r\\n/g, '\\n')  // Windows 줄바꿈 통일\n  .replace(/\\n{3,}/g, '\\n\\n')  // 과도한 빈 줄 제거\n  .trim();\n\n// 메타데이터 추출\nconst lineCount = cleanedText.split('\\n').length;\nconst wordCount = cleanedText.split(/\\s+/).length;\nconst charCount = cleanedText.length;\n\nreturn [{\n  json: {\n    text: cleanedText,\n    metadata: {\n      line_count: lineCount,\n      word_count: wordCount,\n      char_count: charCount,\n      extracted_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "clean-text",
+      "name": "텍스트 정리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [656, 176]
+    }
+  ],
+  "connections": {
+    "PDF 업로드": {
+      "main": [[{"node": "PDF 텍스트 추출", "type": "main", "index": 0}]]
+    },
+    "PDF 텍스트 추출": {
+      "main": [[{"node": "텍스트 정리", "type": "main", "index": 0}]]
+    },
+    "텍스트 정리": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

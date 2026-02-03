@@ -1,0 +1,80 @@
+{
+  "name": "Image OCR - GPT-4o Vision",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "image-ocr",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-image",
+      "name": "이미지 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [32, 176],
+      "webhookId": "image-ocr"
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "resource": "text",
+        "operation": "message",
+        "model": "gpt-4o",
+        "messages": {
+          "values": [
+            {
+              "role": "user",
+              "content": "이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요."
+            }
+          ]
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "id": "gpt4o-vision",
+      "name": "GPT-4o Vision",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1.2,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// GPT-4o Vision 결과 파싱\nconst response = $input.first().json;\nconst extractedText = response.choices?.[0]?.message?.content || response.message?.content || \"\";\n\nreturn [{\n  json: {\n    extracted_text: extractedText,\n    metadata: {\n      char_count: extractedText.length,\n      word_count: extractedText.split(/\\s+/).length,\n      extracted_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "format-result",
+      "name": "결과 포맷팅",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [656, 176]
+    }
+  ],
+  "connections": {
+    "이미지 업로드": {
+      "main": [[{"node": "GPT-4o Vision", "type": "main", "index": 0}]]
+    },
+    "GPT-4o Vision": {
+      "main": [[{"node": "결과 포맷팅", "type": "main", "index": 0}]]
+    },
+    "결과 포맷팅": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

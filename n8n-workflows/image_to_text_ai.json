@@ -1,0 +1,83 @@
+{
+  "name": "Image to Text - AI Vision",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "image-extract",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-image",
+      "name": "이미지 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [32, 176],
+      "webhookId": "image-extract"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 이미지를 base64로 인코딩하여 AI에 전달 준비\nconst inputData = $input.first();\nconst binaryData = inputData.binary?.data;\n\nif (!binaryData) {\n  return [{\n    json: {\n      error: \"이미지 데이터가 없습니다.\"\n    }\n  }];\n}\n\n// 이미지를 base64로 변환 (이미 base64 형태일 수 있음)\nconst imageBase64 = binaryData.data;\nconst mimeType = binaryData.mimeType || 'image/jpeg';\n\n// AI Vision 프롬프트 준비\nconst extractionPrompt = `이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요.\n\n**요구사항:**\n1. 이미지의 모든 텍스트를 그대로 추출\n2. 원본 레이아웃과 구조 유지\n3. 표가 있다면 마크다운 표 형식으로 변환\n4. 추가 설명 없이 텍스트만 출력\n\n**출력 형식:**\n추출된 텍스트만 반환하세요.`;\n\nreturn [{\n  json: {\n    image_data: imageBase64,\n    mime_type: mimeType,\n    extraction_prompt: extractionPrompt,\n    filename: binaryData.fileName || 'image.jpg'\n  }\n}];"
+      },
+      "id": "prepare-image",
+      "name": "이미지 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "model": "gpt-4o",
+        "text": "={{ $json.extraction_prompt }}",
+        "options": {}
+      },
+      "id": "ai-vision",
+      "name": "AI Vision OCR",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI Vision 결과 파싱\nconst extractedText = $input.first().json.output || \"\";\n\nreturn [{\n  json: {\n    extracted_text: extractedText,\n    metadata: {\n      char_count: extractedText.length,\n      word_count: extractedText.split(/\\s+/).length,\n      extracted_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "format-result",
+      "name": "결과 포맷팅",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [656, 176]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [864, 176]
+    }
+  ],
+  "connections": {
+    "이미지 업로드": {
+      "main": [[{"node": "이미지 준비", "type": "main", "index": 0}]]
+    },
+    "이미지 준비": {
+      "main": [[{"node": "AI Vision OCR", "type": "main", "index": 0}]]
+    },
+    "AI Vision OCR": {
+      "main": [[{"node": "결과 포맷팅", "type": "main", "index": 0}]]
+    },
+    "결과 포맷팅": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

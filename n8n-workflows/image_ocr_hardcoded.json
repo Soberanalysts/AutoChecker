@@ -1,0 +1,94 @@
+{
+  "name": "Image OCR - Hardcoded File",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "id": "schedule-trigger",
+      "name": "수동 실행",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [32, 176]
+    },
+    {
+      "parameters": {
+        "filePath": "/Users/imseongjin/AutoChecker/example/쓰기 채점_예문 (1).jpg",
+        "options": {}
+      },
+      "id": "read-file",
+      "name": "이미지 파일 읽기",
+      "type": "n8n-nodes-base.readBinaryFile",
+      "typeVersion": 1,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 읽어온 이미지를 base64로 변환\nconst binaryData = $input.first().binary?.data;\n\nif (!binaryData) {\n  throw new Error(\"이미지 파일을 읽을 수 없습니다.\");\n}\n\n// base64 데이터 추출\nlet imageBase64;\nif (typeof binaryData.data === 'string') {\n  imageBase64 = binaryData.data;\n} else if (Buffer.isBuffer(binaryData.data)) {\n  imageBase64 = binaryData.data.toString('base64');\n} else {\n  imageBase64 = binaryData.data;\n}\n\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\n\nconsole.log(`이미지 로드 완료: ${fileName} (${mimeType})`);\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName\n  }\n}];"
+      },
+      "id": "prepare-image",
+      "name": "이미지 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ \n  JSON.stringify({\n    model: 'gpt-4o',\n    messages: [\n      {\n        role: 'user',\n        content: [\n          {\n            type: 'text',\n            text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n          },\n          {\n            type: 'image_url',\n            image_url: {\n              url: 'data:' + $json.mime_type + ';base64,' + $json.image_base64\n            }\n          }\n        ]\n      }\n    ],\n    max_tokens: 4096,\n    temperature: 0\n  })\n}}",
+        "options": {}
+      },
+      "id": "openai-vision",
+      "name": "OpenAI Vision API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [656, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// OpenAI 응답 파싱\nconst response = $input.first().json;\nconst extractedText = response.choices?.[0]?.message?.content || \"\";\n\nreturn [{\n  json: {\n    extracted_text: extractedText,\n    metadata: {\n      char_count: extractedText.length,\n      word_count: extractedText.split(/\\s+/).filter(w => w).length,\n      line_count: extractedText.split('\\n').length,\n      extracted_at: new Date().toISOString(),\n      model: response.model || 'gpt-4o',\n      usage: response.usage\n    }\n  }\n}];"
+      },
+      "id": "format-result",
+      "name": "결과 출력",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [864, 176]
+    }
+  ],
+  "connections": {
+    "수동 실행": {
+      "main": [[{"node": "이미지 파일 읽기", "type": "main", "index": 0}]]
+    },
+    "이미지 파일 읽기": {
+      "main": [[{"node": "이미지 준비", "type": "main", "index": 0}]]
+    },
+    "이미지 준비": {
+      "main": [[{"node": "OpenAI Vision API", "type": "main", "index": 0}]]
+    },
+    "OpenAI Vision API": {
+      "main": [[{"node": "결과 출력", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

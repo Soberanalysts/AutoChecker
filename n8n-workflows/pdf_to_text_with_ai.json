@@ -1,0 +1,95 @@
+{
+  "name": "PDF to Text with AI - Enhanced",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "pdf-extract-ai",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-pdf-ai",
+      "name": "PDF 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [32, 176],
+      "webhookId": "pdf-extract-ai"
+    },
+    {
+      "parameters": {
+        "operation": "convert",
+        "options": {}
+      },
+      "id": "extract-text-ai",
+      "name": "PDF 텍스트 추출",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 추출된 원본 텍스트\nconst rawText = $input.first().json.text || $input.first().binary?.data?.toString() || \"\";\n\n// AI에게 전달할 프롬프트 준비\nconst cleaningPrompt = `다음 PDF에서 추출한 텍스트를 정리해주세요.\n\n**작업 내용:**\n1. 불필요한 공백과 줄바꿈 제거\n2. 문단 구조 정리\n3. 표나 목록이 있다면 마크다운 형식으로 변환\n4. 페이지 번호, 헤더/푸터 제거\n5. 읽기 쉽게 포맷팅\n\n**원본 텍스트:**\n${rawText}\n\n**출력 형식:**\n정리된 텍스트만 출력하세요. 추가 설명 없이 텍스트만 반환하세요.`;\n\nreturn [{\n  json: {\n    raw_text: rawText,\n    cleaning_prompt: cleaningPrompt,\n    char_count: rawText.length\n  }\n}];"
+      },
+      "id": "prepare-cleaning",
+      "name": "정리 프롬프트 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.cleaning_prompt }}",
+        "options": {}
+      },
+      "id": "ai-clean",
+      "name": "AI 텍스트 정리",
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [656, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI 응답 파싱\nconst cleanedText = $input.first().json.output || \"\";\nconst rawText = $input.first().json.raw_text || \"\";\n\nreturn [{\n  json: {\n    original_text: rawText,\n    cleaned_text: cleanedText,\n    metadata: {\n      original_length: rawText.length,\n      cleaned_length: cleanedText.length,\n      reduction_percent: Math.round((1 - cleanedText.length / rawText.length) * 100),\n      processed_at: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "format-result",
+      "name": "결과 포맷팅",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [864, 176]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response-ai",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1072, 176]
+    }
+  ],
+  "connections": {
+    "PDF 업로드": {
+      "main": [[{"node": "PDF 텍스트 추출", "type": "main", "index": 0}]]
+    },
+    "PDF 텍스트 추출": {
+      "main": [[{"node": "정리 프롬프트 준비", "type": "main", "index": 0}]]
+    },
+    "정리 프롬프트 준비": {
+      "main": [[{"node": "AI 텍스트 정리", "type": "main", "index": 0}]]
+    },
+    "AI 텍스트 정리": {
+      "main": [[{"node": "결과 포맷팅", "type": "main", "index": 0}]]
+    },
+    "결과 포맷팅": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
