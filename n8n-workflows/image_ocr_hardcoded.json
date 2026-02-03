@@ -17,7 +17,7 @@
     },
     {
       "parameters": {
-        "filePath": "/Users/imseongjin/AutoChecker/example/쓰기 채점_예문 (1).jpg",
+        "filePath": "/Users/imseongjin/.n8n-files/examples/쓰기 채점_예문 (1).jpg",
         "options": {}
       },
       "id": "read-file",
