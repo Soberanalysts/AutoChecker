@@ -1,0 +1,18 @@
+{
+  "total_students": 1,
+  "processed_at": "2026-02-03T07:46:49.364Z",
+  "students": [
+    {
+      "answer": [
+        "고향을 소개하는 글을 써 보세요.\nwrite a passage introducing your hometown.\n\n저는 안나라고 합니다\n제 고향은 독일 뮌헨인데 남쪽에 있습니다\n소개하고 싶은 곳은 마리엔 광장인데\n성당이 많습니다.\n뮌헨은 맥주가 유명하 ~고~ 그 값도 비싸지\n않습니다. 한국 친구들에게 소개하려고\n이렇게 글을 썼습니다.\n도시는 크지 않지만 아름답습니다.",
+        "고향을 소개하는 글을 써 보세요.\nWrite a passage introducing your hometown.\n\n저는 수진라고 합니다.\n제 고향은 스페인 바르셀로나데\n바다 옆에 있습니다.\n카사 비센스는 가우디의 첫 작품인데\n정말 멋집니다.\n거기에 가려면 미리 예약을\n해야 됩니다.\n서울보다 훨씬 크지 않지만\n구경할 것이 많습니다.",
+        "고향을 소개하는 글을 써 보세요.\nWrite a passage introducing your hometown.\n\n저는 호아입니다\n제 고향은 하노이라고 합니다.\n\n하노이는 베트남의 수도인데\n매우 덥습니다. 제일 높은 곳은\n랜드마크72인데 멋집니다.\n\n거기 가면 버스를 타고 다시\n지하철은 탑니다.\n하노이는 크지 않만 관광객이 많습니",
+        "고향을 소개하는 글을 써 보세요.\nWrite a passage introducing your hometown.\n\n저는 다오입니다.\n제 고향은 다낭입니다. 인데 거의\n베트남의 가운데에 있습니다.\n유명한 휴양지인데 많은 상점과\n볼 거리가 있습니다.\n마사지를 소개하려고 글을 씁니다.",
+        "고향을 소개하는 글을 써 보세요.\nWrite a passage introducing your hometown.\n\n저는 타인라고 합니다.\n제 고향은 푸꾸옥입니다.\n거기 가려고 하면 호치민에서\n비행기를 잡아타야 합니다.\n아름답지만 크지 않습니다."
+      ],
+      "metadata": {},
+      "status": "success",
+      "error": null
+    }
+  ]
+}

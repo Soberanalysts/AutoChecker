@@ -1,0 +1,46 @@
+{
+  "total_students": 5,
+  "processed_at": "2026-02-03 16:09:30",
+  "students": [
+    {
+      "student_id": 1,
+      "image_file": "쓰기 채점_예문 (1).jpg",
+      "answer": "",
+      "metadata": {},
+      "ocr_status": "failed",
+      "error": "HTTP 404"
+    },
+    {
+      "student_id": 2,
+      "image_file": "쓰기 채점_예문 (2).jpg",
+      "answer": "",
+      "metadata": {},
+      "ocr_status": "failed",
+      "error": "HTTP 404"
+    },
+    {
+      "student_id": 3,
+      "image_file": "쓰기 채점_예문 (3).jpg",
+      "answer": "",
+      "metadata": {},
+      "ocr_status": "failed",
+      "error": "HTTP 404"
+    },
+    {
+      "student_id": 4,
+      "image_file": "쓰기 채점_예문 (4).jpg",
+      "answer": "",
+      "metadata": {},
+      "ocr_status": "failed",
+      "error": "HTTP 404"
+    },
+    {
+      "student_id": 5,
+      "image_file": "쓰기 채점_예문 (5).jpg",
+      "answer": "",
+      "metadata": {},
+      "ocr_status": "failed",
+      "error": "HTTP 404"
+    }
+  ]
+}

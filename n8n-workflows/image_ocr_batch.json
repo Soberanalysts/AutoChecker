@@ -1,0 +1,149 @@
+{
+  "name": "Image OCR - Batch Processing",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "image-ocr-batch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-batch",
+      "name": "배치 이미지 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [32, 176],
+      "webhookId": "image-ocr-batch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook에서 받은 여러 파일을 개별 아이템으로 분리\nconst items = [];\n\n// Binary data가 배열인지 확인\nconst inputItem = $input.first();\n\nif (inputItem.binary) {\n  // binary 객체의 모든 키를 순회\n  const binaryKeys = Object.keys(inputItem.binary);\n  \n  console.log(`총 ${binaryKeys.length}개 파일 감지`);\n  \n  for (const key of binaryKeys) {\n    items.push({\n      json: {},\n      binary: {\n        data: inputItem.binary[key]\n      }\n    });\n  }\n}\n\nconsole.log(`${items.length}개 아이템으로 분리 완료`);\n\nreturn items;"
+      },
+      "id": "split-files",
+      "name": "파일 분리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [240, 176]
+    },
+    {
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [448, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 현재 배치의 이미지를 base64로 준비\nconst item = $input.first();\n\n// Binary data 확인\nif (!item.binary || !item.binary.data) {\n  return [{\n    json: {\n      error: '이미지 데이터가 없습니다.',\n      index: $node['Split In Batches'].context['currentBatch']\n    }\n  }];\n}\n\nconst binaryData = item.binary.data;\n\n// n8n의 getBinaryDataBuffer helper 사용\nconst binaryDataBuffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst imageBase64 = binaryDataBuffer.toString('base64');\n\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\nconst batchIndex = $node['Split In Batches'].context['currentBatch'] + 1;\n\nconsole.log(`[${batchIndex}] 이미지 base64 변환:`, {\n  fileName,\n  mimeType,\n  base64Length: imageBase64.length,\n  sizeKB: Math.round(imageBase64.length / 1024)\n});\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName,\n    batch_index: batchIndex\n  }\n}];"
+      },
+      "id": "prepare-image-batch",
+      "name": "이미지 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [656, 176]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o',\n  messages: [\n    {\n      role: 'user',\n      content: [\n        {\n          type: 'text',\n          text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n        },\n        {\n          type: 'image_url',\n          image_url: {\n            url: 'data:' + $json.mime_type + ';base64,' + $json.image_base64\n          }\n        }\n      ]\n    }\n  ],\n  max_tokens: 4096,\n  temperature: 0\n}) }}",
+        "options": {}
+      },
+      "id": "openai-vision-batch",
+      "name": "OpenAI Vision API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [864, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// OpenAI 응답 파싱\nconst response = $input.first().json;\nconst prepareData = $node['이미지 준비'].json;\n\n// 에러 체크\nif (response.error) {\n  console.error('OpenAI API 에러:', response.error);\n  return [{\n    json: {\n      student_id: prepareData.batch_index,\n      filename: prepareData.filename,\n      error: true,\n      error_message: response.error.message,\n      extracted_text: \"\"\n    }\n  }];\n}\n\n// 정상 응답 처리\nconst extractedText = response.choices?.[0]?.message?.content || \"\";\n\nconsole.log(`[${prepareData.batch_index}] 추출 완료: ${extractedText.length}자`);\n\nreturn [{\n  json: {\n    student_id: prepareData.batch_index,\n    filename: prepareData.filename,\n    extracted_text: extractedText,\n    char_count: extractedText.length,\n    word_count: extractedText.split(/\\s+/).filter(w => w).length,\n    extracted_at: new Date().toISOString(),\n    model: response.model || 'gpt-4o'\n  }\n}];"
+      },
+      "id": "format-result-batch",
+      "name": "결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1072, 176]
+    },
+    {
+      "parameters": {},
+      "id": "aggregate-results",
+      "name": "결과 통합",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [1280, 176]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate로 수집된 모든 결과 포맷팅\nconst allResults = $input.all();\n\nconst students = allResults.map(item => ({\n  student_id: item.json.student_id,\n  filename: item.json.filename,\n  answer: item.json.extracted_text,\n  metadata: {\n    char_count: item.json.char_count,\n    word_count: item.json.word_count,\n    extracted_at: item.json.extracted_at,\n    model: item.json.model\n  },\n  status: item.json.error ? 'failed' : 'success',\n  error: item.json.error_message || null\n}));\n\nreturn [{\n  json: {\n    total_students: students.length,\n    processed_at: new Date().toISOString(),\n    students: students\n  }\n}];"
+      },
+      "id": "format-final-result",
+      "name": "최종 결과 포맷",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1488, 176]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response-batch",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1696, 176]
+    }
+  ],
+  "connections": {
+    "배치 이미지 업로드": {
+      "main": [[{"node": "파일 분리", "type": "main", "index": 0}]]
+    },
+    "파일 분리": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    },
+    "이미지 준비": {
+      "main": [[{"node": "OpenAI Vision API", "type": "main", "index": 0}]]
+    },
+    "OpenAI Vision API": {
+      "main": [[{"node": "결과 파싱", "type": "main", "index": 0}]]
+    },
+    "결과 파싱": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    },
+    "Split In Batches": {
+      "main": [
+        [{"node": "이미지 준비", "type": "main", "index": 0}],
+        [{"node": "결과 통합", "type": "main", "index": 0}]
+      ]
+    },
+    "결과 통합": {
+      "main": [[{"node": "최종 결과 포맷", "type": "main", "index": 0}]]
+    },
+    "최종 결과 포맷": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

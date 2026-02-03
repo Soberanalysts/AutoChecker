@@ -1,0 +1,6 @@
+{
+  "error": "HTTP 404",
+  "error_detail": "{\"code\":404,\"message\":\"The requested webhook \\\"image-ocr\\\" is not registered.\",\"hint\":\"Click the 'Execute workflow' button on the canvas, then try again. (In test mode, the webhook only works for one call after you click this button)\",\"stacktrace\":\"ResponseError: The requested webhook \\\"image-ocr\\\" is not registered.\\n    at TestWebhooks.getWebhookMethods (/opt/homebrew/lib/node_modules/n8n/src/webhooks/test-webhooks.ts:240:37)\\n    at TestWebhooks.executeWebhook (/opt/homebrew/lib/node_modules/n8n/src/webhooks/test-webhooks.ts:91:22)\\n    at WebhookRequestHandler.handleRequest (/opt/homebrew/lib/node_modules/n8n/src/webhooks/webhook-request-handler.ts:66:21)\\n    at /opt/homebrew/lib/node_modules/n8n/src/webhooks/webhook-request-handler.ts:257:3\"}",
+  "extracted_text": "",
+  "metadata": {}
+}
