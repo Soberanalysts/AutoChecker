@@ -1,0 +1,444 @@
+{
+  "name": "AutoChecker",
+  "nodes": [
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4.1-mini"
+        },
+        "builtInTools": {},
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.3,
+      "position": [
+        496,
+        416
+      ],
+      "id": "e848ddfb-62ad-4aad-a4c0-ba5a7abb6f13",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "grade",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "fd909c88-073a-4afc-802a-f13f48d567fe",
+      "name": "텍스트 입력",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        304,
+        192
+      ],
+      "webhookId": "simple-grade"
+    },
+    {
+      "parameters": {
+        "jsCode": "// 입력된 학생 답안 (웹훅 또는 채팅 메시지)\nconst inputData = $input.first().json;\nconst studentAnswer = inputData.chatInput || inputData.body?.answer || inputData.answer || \"답안이 입력되지 않았습니다.\";\n\n// 채점 기준 (하드코딩)\nconst gradingPrompt = `\n# 한국어 쓰기 과제 채점\n\n## 과제 정보\n- 과: 서울대 한국어 플러스 2A-1과\n- 과제명: 제 고향\n- 필수 문장 수: 6문장 이상\n\n## 학생 답안\n${studentAnswer}\n\n---\n\n## 채점 기준 (총 100점)\n\n### 1. 과제 수행도 (25점)\n다음 4가지 필수 요소가 모두 포함되어 있는지 확인:\n- **이름 소개** (5점): '-라고 하다' 또는 '-이에요/예요' 사용\n- **고향 위치** (5점): '고향', '있습니다' 등으로 위치 설명\n- **고향 특징** (10점): 고향에 대한 설명 (크기, 분위기, 특징 등)\n- **소개하고 싶은 내용** (5점): 유명한 것, 좋아하는 점 등\n\n### 2. 핵심 문법 사용 (30점)\n다음 4가지 문법이 **정확하게** 사용되었는지 확인:\n\n1. **-는데/-은데** (7.5점)\n   - 용도: 배경 설명, 대조\n   - 예시: \"하노이인데 베트남의 북쪽에 있습니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n2. **-지만** (7.5점)\n   - 용도: 반대 상황 표현\n   - 예시: \"크지 않지만 사람들이 많습니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n3. **-(으)려고** (7.5점)\n   - 용도: 의도 표현\n   - 예시: \"소개하려고 이 글을 씁니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n4. **-라고 하다** (7.5점)\n   - 용도: 이름 소개, 인용\n   - 예시: \"다니엘이라고 합니다\"\n   - 채점: 형태 정확 + 의미 적절 → 만점 / 형태만 맞음 → 50% / 미사용 → 0점\n\n### 3. 내용 적절성 (15점)\n- 의미가 이해 가능한가? (5점)\n- 내용에 불필요한 반복이 없는가? (5점)\n- 주제에서 벗어나지 않았는가? (5점)\n\n### 4. 조직력 (10점)\n- 문장 순서가 자연스러운가? (5점)\n- 연결 표현이 적절하게 사용되었는가? (5점)\n\n### 5. 어휘 사용 (10점)\n- 2A 수준에 맞는 어휘를 사용했는가? (5점)\n- 같은 어휘를 과도하게 반복하지 않았는가? (5점)\n\n### 6. 문법 정확성 (10점)\n**조사, 어미 오류 개수 기준** (6문장 기준):\n- 0~1개 오류: 10점\n- 2~3개 오류: 7점\n- 4~5개 오류: 4점\n- 6개 이상 오류: 0점\n\n---\n\n## 모범 답안 (참고용)\n안녕하세요. 저는 다니엘이라고 합니다. 제 고향은 베트남 하노이인데 베트남의 북쪽에 있습니다. 하노이는 크지 않지만 사람들이 많고 활기찬 도시입니다. 제가 소개하고 싶은 곳은 호안끼엠 호수인데 경치가 아주 좋습니다. 제 고향은 쌀국수가 유명하지만 너무 맵지 않습니다. 저는 한국 친구들에게 제 고향을 소개하려고 이 글을 씁니다.\n\n---\n\n## 출력 형식\n\n반드시 아래 JSON 형식으로만 출력하세요:\n\n{\n  \"scores\": {\n    \"task_completion\": {\n      \"score\": 0,\n      \"max_score\": 25,\n      \"details\": \"이름 소개: 5/5, 고향 위치: 5/5, 고향 특징: 8/10, 소개 내용: 4/5\"\n    },\n    \"grammar_usage\": {\n      \"score\": 0,\n      \"max_score\": 30,\n      \"details\": \"-는데/-은데: 7.5/7.5 (사용 정확), -지만: 7.5/7.5 (사용 정확), -(으)려고: 0/7.5 (미사용), -라고 하다: 7.5/7.5 (사용 정확)\"\n    },\n    \"content_adequacy\": {\n      \"score\": 0,\n      \"max_score\": 15,\n      \"details\": \"의미 이해 가능: 5/5, 반복 없음: 4/5, 주제 일관성: 5/5\"\n    },\n    \"organization\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"details\": \"문장 순서: 5/5, 연결 표현: 4/5\"\n    },\n    \"vocabulary\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"details\": \"수준 적절성: 5/5, 반복 회피: 4/5\"\n    },\n    \"grammar_accuracy\": {\n      \"score\": 0,\n      \"max_score\": 10,\n      \"error_count\": 0,\n      \"errors\": [\"오류 예시 1\", \"오류 예시 2\"]\n    },\n    \"total_score\": 0\n  },\n  \"feedback\": {\n    \"strengths\": [\n      \"잘한 점 1\",\n      \"잘한 점 2\"\n    ],\n    \"improvements\": [\n      \"개선할 점 1\",\n      \"개선할 점 2\"\n    ],\n    \"overall_comment\": \"전체적인 평가를 2-3문장으로 작성\"\n  }\n}\n`;\n\nreturn [{\n  json: {\n    student_answer: studentAnswer,\n    grading_prompt: gradingPrompt,\n    sessionId: inputData.body?.sessionId || inputData.sessionId || 'default-session'\n  }\n}];"
+      },
+      "id": "cc380944-34ac-4667-a3aa-4c1d98c427e9",
+      "name": "프롬프트 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "86c0f2d0-34c3-4be6-a885-f25e85dfc28f",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1232,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.grading_prompt }}",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        656,
+        192
+      ],
+      "id": "7c2b31a8-a075-4d14-8a7c-62dd87ef0eac",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.4,
+      "position": [
+        304,
+        336
+      ],
+      "id": "2b2f83fa-0b23-4126-8ccf-c811e3806848",
+      "name": "When chat message received",
+      "webhookId": "aaffa3c2-2ee3-4be9-a9b5-ec5157682e25"
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI Agent 응답 파싱\nconst inputData = $input.first().json;\nconst aiResponse = inputData.output;\nlet gradingResult;\n\ntry {\n  // JSON 코드 블록에서 실제 JSON 추출\n  const jsonMatch = aiResponse.match(/```json\\s*([\\s\\S]*?)\\s*```/) || aiResponse.match(/\\{[\\s\\S]*\\}/);\n  const jsonString = jsonMatch ? (jsonMatch[1] || jsonMatch[0]) : aiResponse;\n  gradingResult = JSON.parse(jsonString);\n} catch (error) {\n  gradingResult = {\n    error: \"JSON 파싱 실패\",\n    raw_response: aiResponse\n  };\n}\n\n// 학생 답안 가져오기\ntry {\n  // 워크플로우 실행 데이터에서 프롬프트 준비 노드의 출력 가져오기\n  const prepData = $execution.customData.get('student_answer') || \n                   $input.first().json.student_answer;\n  \n  if (prepData) {\n    gradingResult.student_answer = prepData;\n  } else {\n    // 프롬프트에서 추출 시도\n    const answerMatch = aiResponse.match(/## 학생 답안\\s*([\\s\\S]*?)\\s*---/);\n    gradingResult.student_answer = answerMatch ? answerMatch[1].trim() : \"답안 추출 실패\";\n  }\n} catch (e) {\n  // 에러 발생 시 프롬프트에서 추출\n  const answerMatch = aiResponse.match(/## 학생 답안\\s*([\\s\\S]*?)\\s*---/);\n  gradingResult.student_answer = answerMatch ? answerMatch[1].trim() : \"답안 추출 실패\";\n}\n\nreturn [{\n  json: gradingResult\n}];"
+      },
+      "id": "c7683342-4cdd-495d-b9b8-8300794671ef",
+      "name": "결과 파싱1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1024,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "image-ocr-batch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "35079f6c-2ab7-4600-a8e8-8ce2e55434f4",
+      "name": "배치 이미지 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [
+        -1232,
+        320
+      ],
+      "webhookId": "image-ocr-batch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook에서 받은 여러 파일을 개별 아이템으로 분리\nconst items = [];\n\n// Binary data가 배열인지 확인\nconst inputItem = $input.first();\n\nif (inputItem.binary) {\n  // binary 객체의 모든 키를 순회\n  const binaryKeys = Object.keys(inputItem.binary);\n  \n  console.log(`총 ${binaryKeys.length}개 파일 감지`);\n  \n  for (const key of binaryKeys) {\n    items.push({\n      json: {},\n      binary: {\n        data: inputItem.binary[key]\n      }\n    });\n  }\n}\n\nconsole.log(`${items.length}개 아이템으로 분리 완료`);\n\nreturn items;"
+      },
+      "id": "33f97b5c-258a-41dc-9605-7a44ad3f37a4",
+      "name": "파일 분리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -1024,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "5b7da96a-1891-471a-96dc-570e01a8a1f0",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        -816,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// OpenAI 응답 파싱\nconst response = $input.first().json;\nconst prepareData = $node['이미지 준비1'].json;\n\n// 에러 체크\nif (response.error) {\n  console.error('OpenAI API 에러:', response.error);\n  return [{\n    json: {\n      student_id: prepareData.batch_index,\n      filename: prepareData.filename,\n      error: true,\n      error_message: response.error.message,\n      extracted_text: \"\"\n    }\n  }];\n}\n\n// 정상 응답 처리\nconst extractedText = response.choices?.[0]?.message?.content || \"\";\n\nconsole.log(`[${prepareData.batch_index}] 추출 완료: ${extractedText.length}자`);\n\nreturn [{\n  json: {\n    student_id: prepareData.batch_index,\n    filename: prepareData.filename,\n    extracted_text: extractedText,\n    char_count: extractedText.length,\n    word_count: extractedText.split(/\\s+/).filter(w => w).length,\n    extracted_at: new Date().toISOString(),\n    model: response.model || 'gpt-4o'\n  }\n}];"
+      },
+      "id": "b5f3be85-3017-47c6-8db4-c371b1955c33",
+      "name": "결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        0,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "fieldsToAggregate": {
+          "fieldToAggregate": [
+            {
+              "fieldToAggregate": "extracted_text"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "0e424980-23c7-4a97-8bb2-c6821cd58118",
+      "name": "결과 통합",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        -576,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Aggregate로 수집된 모든 결과 포맷팅\nconst allResults = $input.all();\n\nconst students = allResults.map(item => ({\n  student_id: item.json.student_id,\n  filename: item.json.filename,\n  answer: item.json.extracted_text,\n  metadata: {\n    char_count: item.json.char_count,\n    word_count: item.json.word_count,\n    extracted_at: item.json.extracted_at,\n    model: item.json.model\n  },\n  status: item.json.error ? 'failed' : 'success',\n  error: item.json.error_message || null\n}));\n\nreturn [{\n  json: {\n    total_students: students.length,\n    processed_at: new Date().toISOString(),\n    students: students\n  }\n}];"
+      },
+      "id": "b76a8a63-dfa8-4c17-9dc5-d3d5e5db127e",
+      "name": "최종 결과 포맷",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -416,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 현재 배치의 이미지를 base64로 준비\nconst item = $input.first();\n\n// Binary data 확인\nif (!item.binary || !item.binary.data) {\n  return [{\n    json: {\n      error: '이미지 데이터가 없습니다.',\n      index: $node['Split In Batches'].context['currentBatch']\n    }\n  }];\n}\n\nconst binaryData = item.binary.data;\n\n// n8n의 getBinaryDataBuffer helper 사용\nconst binaryDataBuffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst imageBase64 = binaryDataBuffer.toString('base64');\n\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\nconst batchIndex = $node['Split In Batches'].context['currentBatch'] + 1;\n\nconsole.log(`[${batchIndex}] 이미지 base64 변환:`, {\n  fileName,\n  mimeType,\n  base64Length: imageBase64.length,\n  sizeKB: Math.round(imageBase64.length / 1024)\n});\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName,\n    batch_index: batchIndex\n  }\n}];"
+      },
+      "id": "705e30d4-7e1a-4a58-b2b2-4b20d73b5d31",
+      "name": "이미지 준비1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -560,
+        336
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "8686552e-42ab-4342-b8c9-710736bd9d84",
+      "name": "결과 반환1",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        -208,
+        112
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o',\n  messages: [\n    {\n      role: 'user',\n      content: [\n        {\n          type: 'text',\n          text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n        },\n        {\n          type: 'image_url',\n          image_url: {\n            url: 'data:' + $json.mime_type + ';base64,' + $json.image_base64\n          }\n        }\n      ]\n    }\n  ],\n  max_tokens: 4096,\n  temperature: 0\n}) }}",
+        "options": {}
+      },
+      "id": "522f7236-b605-4766-8a6a-a3b09f29a21e",
+      "name": "OpenAI Vision API3",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [
+        -304,
+        336
+      ],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "텍스트 입력": {
+      "main": [
+        [
+          {
+            "node": "프롬프트 준비",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "프롬프트 준비": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "결과 파싱1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "프롬프트 준비",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "결과 파싱1": {
+      "main": [
+        [
+          {
+            "node": "결과 반환",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "배치 이미지 업로드": {
+      "main": [
+        [
+          {
+            "node": "파일 분리",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "파일 분리": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split In Batches": {
+      "main": [
+        [
+          {
+            "node": "결과 통합",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "이미지 준비1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "결과 파싱": {
+      "main": [
+        [
+          {
+            "node": "Split In Batches",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "결과 통합": {
+      "main": [
+        [
+          {
+            "node": "최종 결과 포맷",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "최종 결과 포맷": {
+      "main": [
+        [
+          {
+            "node": "결과 반환1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "이미지 준비1": {
+      "main": [
+        [
+          {
+            "node": "OpenAI Vision API3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI Vision API3": {
+      "main": [
+        [
+          {
+            "node": "결과 파싱",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": false
+  },
+  "versionId": "558fe9f0-18fc-492b-a359-78afecc96e3c",
+  "meta": {
+    "instanceId": "a1134da49519b4f5d5c9471917ddf660cc01fdde452251129b50f527a45b3b73"
+  },
+  "id": "rui2qtfhEKVKJodo",
+  "tags": []
+}

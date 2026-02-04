@@ -1,0 +1,410 @@
+{
+  "name": "AutoChecker (With PostgreSQL)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "image-ocr-batch",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-batch",
+      "name": "배치 이미지 업로드",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 400],
+      "webhookId": "image-ocr-batch"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Webhook에서 받은 여러 파일을 개별 아이템으로 분리\nconst items = [];\nconst inputItem = $input.first();\n\nif (inputItem.binary) {\n  const binaryKeys = Object.keys(inputItem.binary);\n  console.log(`총 ${binaryKeys.length}개 파일 감지`);\n  \n  for (const key of binaryKeys) {\n    items.push({\n      json: {},\n      binary: {\n        data: inputItem.binary[key]\n      }\n    });\n  }\n}\n\nconsole.log(`${items.length}개 아이템으로 분리 완료`);\nreturn items;"
+      },
+      "id": "split-files",
+      "name": "파일 분리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 400]
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "id": "split-batches",
+      "name": "Split In Batches",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [680, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 현재 배치의 이미지를 base64로 준비\nconst item = $input.first();\n\nif (!item.binary || !item.binary.data) {\n  return [{\n    json: {\n      error: '이미지 데이터가 없습니다.',\n      index: $node['Split In Batches'].context['currentBatch']\n    }\n  }];\n}\n\nconst binaryData = item.binary.data;\nconst binaryDataBuffer = await this.helpers.getBinaryDataBuffer(0, 'data');\nconst imageBase64 = binaryDataBuffer.toString('base64');\n\nconst mimeType = binaryData.mimeType || 'image/jpeg';\nconst fileName = binaryData.fileName || 'image.jpg';\nconst batchIndex = $node['Split In Batches'].context['currentBatch'] + 1;\n\nconsole.log(`[${batchIndex}] 이미지 base64 변환:`, {\n  fileName,\n  mimeType,\n  base64Length: imageBase64.length,\n  sizeKB: Math.round(imageBase64.length / 1024)\n});\n\nreturn [{\n  json: {\n    image_base64: imageBase64,\n    mime_type: mimeType,\n    filename: fileName,\n    batch_index: batchIndex\n  }\n}];"
+      },
+      "id": "prepare-image",
+      "name": "이미지 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o',\n  messages: [\n    {\n      role: 'user',\n      content: [\n        {\n          type: 'text',\n          text: '이 이미지에 있는 모든 텍스트를 정확하게 추출해주세요. 한글, 영어, 숫자 모두 포함해서 원본 그대로 추출하세요. 추가 설명 없이 텍스트만 반환하세요.'\n        },\n        {\n          type: 'image_url',\n          image_url: {\n            url: 'data:' + $json.mime_type + ';base64,' + $json.image_base64\n          }\n        }\n      ]\n    }\n  ],\n  max_tokens: 4096,\n  temperature: 0\n}) }}",
+        "options": {}
+      },
+      "id": "openai-vision",
+      "name": "OpenAI Vision OCR",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [1120, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// OpenAI 응답 파싱 및 학생 이름 추출\nconst response = $input.first().json;\nconst prepareData = $node['이미지 준비'].json;\n\n// 에러 체크\nif (response.error) {\n  console.error('OpenAI API 에러:', response.error);\n  return [{\n    json: {\n      student_id: `student_${String(prepareData.batch_index).padStart(3, '0')}`,\n      filename: prepareData.filename,\n      error: true,\n      error_message: response.error.message,\n      extracted_text: \"\"\n    }\n  }];\n}\n\n// 정상 응답 처리\nconst extractedText = response.choices?.[0]?.message?.content || \"\";\n\n// 학생 이름 추출 (\"저는 XXX라고 합니다\" 패턴)\nconst nameMatch = extractedText.match(/저는\\s+(\\S+?)(?:라고|이라고)\\s+합니다/);\nconst studentName = nameMatch ? nameMatch[1] : null;\n\nconst studentId = studentName \n  ? `${studentName}_${String(prepareData.batch_index).padStart(3, '0')}`\n  : `student_${String(prepareData.batch_index).padStart(3, '0')}`;\n\nconsole.log(`[${prepareData.batch_index}] 추출 완료: ${extractedText.length}자, 학생: ${studentId}`);\n\nreturn [{\n  json: {\n    student_id: studentId,\n    filename: prepareData.filename,\n    answer_text: extractedText,\n    char_count: extractedText.length,\n    word_count: extractedText.split(/\\s+/).filter(w => w).length,\n    extracted_at: new Date().toISOString(),\n    ocr_model: response.model || 'gpt-4o',\n    batch_index: prepareData.batch_index\n  }\n}];"
+      },
+      "id": "parse-ocr",
+      "name": "OCR 결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1340, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "student_answers",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "student_id": "={{ $json.student_id }}",
+            "filename": "={{ $json.filename }}",
+            "answer_text": "={{ $json.answer_text }}",
+            "char_count": "={{ $json.char_count }}",
+            "word_count": "={{ $json.word_count }}",
+            "ocr_model": "={{ $json.ocr_model }}",
+            "extracted_at": "={{ $json.extracted_at }}"
+          }
+        },
+        "options": {
+          "returnFields": "answer_id"
+        }
+      },
+      "id": "db-insert-answer",
+      "name": "DB: 답안 저장",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [1560, 400],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// DB 저장 후 answer_id와 함께 채점을 위한 데이터 준비\nconst dbResult = $input.first().json;\nconst parseData = $node['OCR 결과 파싱'].json;\n\nreturn [{\n  json: {\n    answer_id: dbResult.answer_id,\n    student_id: parseData.student_id,\n    answer_text: parseData.answer_text,\n    batch_index: parseData.batch_index\n  }\n}];"
+      },
+      "id": "prepare-grading",
+      "name": "채점 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1780, 400]
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI Agent 채점용 프롬프트 생성\nconst data = $input.first().json;\n\nconst gradingPrompt = `\n# 한국어 쓰기 과제 채점\n\n## 과제 정보\n- 과: 서울대 한국어 플러스 2A-1과\n- 과제명: 제 고향\n- 필수 문장 수: 6문장 이상\n\n## 학생 답안\n${data.answer_text}\n\n---\n\n## 채점 요구사항\n\n1. 총점 100점 기준으로 채점\n2. 각 항목별 점수:\n   - 문법 정확성 (grammar_score): 40점\n   - 어휘 적절성 (vocabulary_score): 30점\n   - 내용 충실성 (content_score): 20점\n   - 구성 및 논리성 (organization_score): 10점\n\n3. 등급 산정:\n   - 90점 이상: A+\n   - 85-89점: A\n   - 80-84점: B+\n   - 75-79점: B\n   - 70-74점: C+\n   - 65-69점: C\n   - 60-64점: D\n   - 60점 미만: F\n\n4. 합격 여부: 70점 이상 합격\n\n5. 오류 검출:\n   각 오류마다 다음 정보 포함:\n   - error_code: G01(조사), G02(시제), G03(어미), G04(어순), G05(접속), V01(어휘), S01(맞춤법), S02(띄어쓰기)\n   - original_text: 오류 부분 원문\n   - corrected_text: 수정안\n   - explanation: 오류 설명\n   - points_deducted: 감점 (-0.1 ~ -1.0)\n   - error_position: 원문에서 문자 위치\n\n---\n\n## 출력 형식 (JSON only)\n\n{\n  \"total_score\": 85.5,\n  \"grammar_score\": 37.0,\n  \"vocabulary_score\": 28.0,\n  \"content_score\": 15.0,\n  \"organization_score\": 5.5,\n  \"grade\": \"A\",\n  \"pass_fail\": true,\n  \"overall_feedback\": \"전반적으로 우수한 답안입니다. 문법과 어휘 사용이 적절하며...\",\n  \"errors\": [\n    {\n      \"error_code\": \"G01\",\n      \"original_text\": \"독일 뮌헨\",\n      \"corrected_text\": \"독일의 뮌헨\",\n      \"explanation\": \"국가와 도시 사이에 관형격 조사 '의'가 필요합니다\",\n      \"points_deducted\": -0.5,\n      \"error_position\": 25\n    }\n  ]\n}\n\n**중요**: JSON 코드 블록(\\`\\`\\`json) 없이 순수 JSON만 반환하세요.\n`;\n\nreturn [{\n  json: {\n    answer_id: data.answer_id,\n    student_id: data.student_id,\n    answer_text: data.answer_text,\n    grading_prompt: gradingPrompt,\n    batch_index: data.batch_index\n  }\n}];"
+      },
+      "id": "build-prompt",
+      "name": "프롬프트 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2000, 400]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({\n  model: 'gpt-4o',\n  messages: [\n    {\n      role: 'system',\n      content: '당신은 한국어 교육 전문가입니다. 학생 답안을 채점하고 JSON 형식으로 결과를 반환합니다. JSON 코드 블록 없이 순수 JSON만 출력하세요.'\n    },\n    {\n      role: 'user',\n      content: $json.grading_prompt\n    }\n  ],\n  temperature: 0.3,\n  response_format: { type: 'json_object' }\n}) }}",
+        "options": {}
+      },
+      "id": "ai-grading",
+      "name": "AI 채점",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.1,
+      "position": [2220, 400],
+      "credentials": {
+        "openAiApi": {
+          "id": "cPWgeLTgmRnP6rZb",
+          "name": "수업용 인증"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// AI 채점 결과 파싱\nconst response = $input.first().json;\nconst promptData = $node['프롬프트 생성'].json;\n\nlet gradingResult;\ntry {\n  const aiResponse = response.choices[0].message.content;\n  gradingResult = JSON.parse(aiResponse);\n} catch (error) {\n  console.error('JSON 파싱 에러:', error);\n  return [{\n    json: {\n      error: 'JSON 파싱 실패',\n      raw_response: response\n    }\n  }];\n}\n\nreturn [{\n  json: {\n    answer_id: promptData.answer_id,\n    student_id: promptData.student_id,\n    total_score: gradingResult.total_score,\n    grammar_score: gradingResult.grammar_score,\n    vocabulary_score: gradingResult.vocabulary_score,\n    content_score: gradingResult.content_score,\n    organization_score: gradingResult.organization_score,\n    grade: gradingResult.grade,\n    pass_fail: gradingResult.pass_fail,\n    overall_feedback: gradingResult.overall_feedback,\n    grading_model: 'gpt-4o',\n    errors: gradingResult.errors || [],\n    batch_index: promptData.batch_index\n  }\n}];"
+      },
+      "id": "parse-grading",
+      "name": "채점 결과 파싱",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2440, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "grading_results",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "answer_id": "={{ $json.answer_id }}",
+            "total_score": "={{ $json.total_score }}",
+            "grammar_score": "={{ $json.grammar_score }}",
+            "vocabulary_score": "={{ $json.vocabulary_score }}",
+            "content_score": "={{ $json.content_score }}",
+            "organization_score": "={{ $json.organization_score }}",
+            "grade": "={{ $json.grade }}",
+            "pass_fail": "={{ $json.pass_fail }}",
+            "grading_model": "={{ $json.grading_model }}",
+            "overall_feedback": "={{ $json.overall_feedback }}"
+          }
+        },
+        "options": {
+          "returnFields": "grading_id"
+        }
+      },
+      "id": "db-insert-grading",
+      "name": "DB: 채점 결과 저장",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [2660, 400],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 오류 목록을 개별 아이템으로 분리\nconst dbResult = $input.first().json;\nconst parseData = $node['채점 결과 파싱'].json;\n\nconst errors = parseData.errors || [];\n\nif (errors.length === 0) {\n  console.log(`[${parseData.student_id}] 오류 없음`);\n  return [{\n    json: {\n      grading_id: dbResult.grading_id,\n      student_id: parseData.student_id,\n      no_errors: true,\n      batch_index: parseData.batch_index\n    }\n  }];\n}\n\n// 각 오류를 개별 아이템으로 생성\nconst items = errors.map(error => ({\n  json: {\n    grading_id: dbResult.grading_id,\n    error_code: error.error_code,\n    original_text: error.original_text,\n    corrected_text: error.corrected_text,\n    explanation: error.explanation,\n    points_deducted: error.points_deducted,\n    error_position: error.error_position,\n    student_id: parseData.student_id,\n    batch_index: parseData.batch_index\n  }\n}));\n\nconsole.log(`[${parseData.student_id}] ${items.length}개 오류 검출`);\nreturn items;"
+      },
+      "id": "split-errors",
+      "name": "오류 목록 분리",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [2880, 400]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.no_errors }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "id": "check-errors",
+      "name": "오류 있는지 확인",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [3100, 400]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list"
+        },
+        "table": {
+          "__rl": true,
+          "value": "detected_errors",
+          "mode": "list"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "grading_id": "={{ $json.grading_id }}",
+            "error_code": "={{ $json.error_code }}",
+            "original_text": "={{ $json.original_text }}",
+            "corrected_text": "={{ $json.corrected_text }}",
+            "explanation": "={{ $json.explanation }}",
+            "points_deducted": "={{ $json.points_deducted }}",
+            "error_position": "={{ $json.error_position }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "db-insert-errors",
+      "name": "DB: 오류 저장",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [3320, 520],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 오류 저장 완료 또는 오류 없음\nconst data = $input.first().json;\n\nreturn [{\n  json: {\n    student_id: data.student_id,\n    batch_index: data.batch_index,\n    completed: true\n  }\n}];"
+      },
+      "id": "merge-path",
+      "name": "병합",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [3540, 400]
+    },
+    {
+      "parameters": {},
+      "id": "aggregate-results",
+      "name": "결과 통합",
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [680, 200]
+    },
+    {
+      "parameters": {
+        "jsCode": "// 모든 학생 처리 완료 후 최종 결과\nconst allResults = $input.all();\n\nreturn [{\n  json: {\n    success: true,\n    message: `${allResults.length}명 학생 답안 처리 완료`,\n    total_students: allResults.length,\n    processed_at: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "final-format",
+      "name": "최종 결과",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 200]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 200]
+    }
+  ],
+  "connections": {
+    "배치 이미지 업로드": {
+      "main": [[{"node": "파일 분리", "type": "main", "index": 0}]]
+    },
+    "파일 분리": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    },
+    "Split In Batches": {
+      "main": [
+        [{"node": "이미지 준비", "type": "main", "index": 0}],
+        [{"node": "결과 통합", "type": "main", "index": 0}]
+      ]
+    },
+    "이미지 준비": {
+      "main": [[{"node": "OpenAI Vision OCR", "type": "main", "index": 0}]]
+    },
+    "OpenAI Vision OCR": {
+      "main": [[{"node": "OCR 결과 파싱", "type": "main", "index": 0}]]
+    },
+    "OCR 결과 파싱": {
+      "main": [[{"node": "DB: 답안 저장", "type": "main", "index": 0}]]
+    },
+    "DB: 답안 저장": {
+      "main": [[{"node": "채점 준비", "type": "main", "index": 0}]]
+    },
+    "채점 준비": {
+      "main": [[{"node": "프롬프트 생성", "type": "main", "index": 0}]]
+    },
+    "프롬프트 생성": {
+      "main": [[{"node": "AI 채점", "type": "main", "index": 0}]]
+    },
+    "AI 채점": {
+      "main": [[{"node": "채점 결과 파싱", "type": "main", "index": 0}]]
+    },
+    "채점 결과 파싱": {
+      "main": [[{"node": "DB: 채점 결과 저장", "type": "main", "index": 0}]]
+    },
+    "DB: 채점 결과 저장": {
+      "main": [[{"node": "오류 목록 분리", "type": "main", "index": 0}]]
+    },
+    "오류 목록 분리": {
+      "main": [[{"node": "오류 있는지 확인", "type": "main", "index": 0}]]
+    },
+    "오류 있는지 확인": {
+      "main": [
+        [{"node": "병합", "type": "main", "index": 0}],
+        [{"node": "DB: 오류 저장", "type": "main", "index": 0}]
+      ]
+    },
+    "DB: 오류 저장": {
+      "main": [[{"node": "병합", "type": "main", "index": 0}]]
+    },
+    "병합": {
+      "main": [[{"node": "Split In Batches", "type": "main", "index": 0}]]
+    },
+    "결과 통합": {
+      "main": [[{"node": "최종 결과", "type": "main", "index": 0}]]
+    },
+    "최종 결과": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

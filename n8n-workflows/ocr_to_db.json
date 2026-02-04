@@ -1,0 +1,111 @@
+{
+  "name": "OCR to PostgreSQL",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "ocr-to-db",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-ocr-db",
+      "name": "OCR 결과 수신",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1.1,
+      "position": [240, 300],
+      "webhookId": "ocr-to-db"
+    },
+    {
+      "parameters": {
+        "jsCode": "// OCR 결과에서 학생 답안 추출 및 DB 저장 형식으로 변환\nconst input = $input.first().json;\n\n// batch_result.json 형식 처리\nif (input.students && Array.isArray(input.students)) {\n  const student = input.students[0];\n  const answers = student.answer; // 배열 형태의 답안들\n  \n  // 각 답안을 개별 학생으로 처리\n  const items = answers.map((answer, index) => {\n    // 학생 이름 추출 (\"저는 XXX라고 합니다\" 패턴)\n    const nameMatch = answer.match(/저는\\s+(\\S+?)(?:라고|이라고)\\s+합니다/);\n    const studentName = nameMatch ? nameMatch[1] : `student_${index + 1}`;\n    \n    return {\n      json: {\n        student_id: `${studentName}_${String(index + 1).padStart(3, '0')}`,\n        filename: `answer_${index + 1}.jpg`,\n        answer_text: answer,\n        char_count: answer.length,\n        word_count: answer.split(/\\s+/).filter(w => w).length,\n        ocr_model: 'gpt-4o'\n      }\n    };\n  });\n  \n  console.log(`${items.length}개 학생 답안 준비 완료`);\n  return items;\n}\n\n// 단일 답안 처리\nreturn [{\n  json: {\n    student_id: input.student_id || 'unknown',\n    filename: input.filename || 'unknown.jpg',\n    answer_text: input.answer_text || input.extracted_text || '',\n    char_count: input.char_count || 0,\n    word_count: input.word_count || 0,\n    ocr_model: input.model || 'gpt-4o'\n  }\n}];"
+      },
+      "id": "prepare-data",
+      "name": "데이터 준비",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "operation": "insert",
+        "schema": {
+          "__rl": true,
+          "value": "public",
+          "mode": "list",
+          "cachedResultName": "public"
+        },
+        "table": {
+          "__rl": true,
+          "value": "student_answers",
+          "mode": "list",
+          "cachedResultName": "student_answers"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "student_id": "={{ $json.student_id }}",
+            "filename": "={{ $json.filename }}",
+            "answer_text": "={{ $json.answer_text }}",
+            "char_count": "={{ $json.char_count }}",
+            "word_count": "={{ $json.word_count }}",
+            "ocr_model": "={{ $json.ocr_model }}"
+          }
+        },
+        "options": {
+          "queryBatching": "independently"
+        }
+      },
+      "id": "postgres-insert",
+      "name": "PostgreSQL에 저장",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.4,
+      "position": [680, 300],
+      "credentials": {
+        "postgres": {
+          "id": "YOUR_POSTGRES_CREDENTIAL_ID",
+          "name": "PostgreSQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// 저장 결과 확인 및 응답 생성\nconst allResults = $input.all();\n\nconst savedStudents = allResults.map(item => ({\n  answer_id: item.json.answer_id,\n  student_id: item.json.student_id,\n  filename: item.json.filename,\n  char_count: item.json.char_count\n}));\n\nreturn [{\n  json: {\n    success: true,\n    message: `${savedStudents.length}개 학생 답안 저장 완료`,\n    saved_students: savedStudents,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "format-response",
+      "name": "응답 생성",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 300]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json, null, 2) }}",
+        "options": {}
+      },
+      "id": "response",
+      "name": "결과 반환",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [1120, 300]
+    }
+  ],
+  "connections": {
+    "OCR 결과 수신": {
+      "main": [[{"node": "데이터 준비", "type": "main", "index": 0}]]
+    },
+    "데이터 준비": {
+      "main": [[{"node": "PostgreSQL에 저장", "type": "main", "index": 0}]]
+    },
+    "PostgreSQL에 저장": {
+      "main": [[{"node": "응답 생성", "type": "main", "index": 0}]]
+    },
+    "응답 생성": {
+      "main": [[{"node": "결과 반환", "type": "main", "index": 0}]]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
